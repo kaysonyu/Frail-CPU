@@ -2,6 +2,8 @@
 `define __ICACHE_SV
 
 `include "common.svh"
+`include "cache_pkg.svh"
+`include "cp0_pkg.svh"
 `ifdef VERILATOR
 
 `endif 
@@ -12,7 +14,10 @@ module ICache (
     input  ibus_req_t  ireq_2,
     output ibus_resp_t iresp,
     output cbus_req_t  icreq,
-    input  cbus_resp_t icresp
+    input  cbus_resp_t icresp,
+
+    input icache_inst_t cache_inst,
+    input cp0_taglo_t tag_lo
 );
     //16KB 2路组相联 1行16个data
     //1 + 7 + 4 + 2
@@ -28,7 +33,7 @@ module ICache (
     localparam OFFSET_BITS = $clog2(DATA_PER_LINE);
     localparam ASSOCIATIVITY_BITS = $clog2(ASSOCIATIVITY);
     localparam INDEX_BITS = $clog2(SET_NUM);
-    localparam TAG_BITS = 29 - INDEX_BITS - OFFSET_BITS - DATA_BITS; 
+    localparam TAG_BITS = 32 - INDEX_BITS - OFFSET_BITS - DATA_BITS; 
 
     localparam DATA_ADDR_BITS = ASSOCIATIVITY_BITS + INDEX_BITS + OFFSET_BITS;
 
@@ -37,7 +42,6 @@ module ICache (
     localparam type associativity_t = logic [ASSOCIATIVITY_BITS-1:0];
     localparam type index_t = logic [INDEX_BITS-1:0];
     localparam type tag_t = logic [TAG_BITS-1:0];
-    localparam type zero_t = logic [2:0];
 
     localparam type data_addr_t = struct packed {
         associativity_t line;
@@ -45,19 +49,10 @@ module ICache (
         offset_t offset;
     };
     localparam type addr_t = struct packed {
-        zero_t zero;
         tag_t tag;
         index_t index;
         offset_t offset;
         align_t align;
-    };
-
-    localparam type reg_t = struct packed {
-        logic hit_1;
-        logic hit_2;
-        logic ireq_en;
-        associativity_t hit_line_1;
-        associativity_t hit_line_2;
     };
 
     //meta_ram
@@ -68,14 +63,51 @@ module ICache (
 
     localparam type meta_t = info_t [ASSOCIATIVITY-1:0];
 
-    localparam type buffer_t = word_t [DATA_PER_LINE-1:0];
-    localparam type record_t = logic [DATA_PER_LINE-1:0];
-
     localparam type plru_t = logic [ASSOCIATIVITY-2:0];
 
     localparam type state_t = enum logic[2:0] {
-        IDLE, FETCH_1, FETCH_2
+        IDLE, FETCH_1, FETCH_2, STORE
     };
+
+    localparam type process_pkg_t = struct packed {
+        logic hit_1;
+        logic hit_2;
+        associativity_t hit_line_1;
+        associativity_t hit_line_2;
+
+        logic ireq_en;
+
+        ibus_req_t ireq_1;
+        ibus_req_t ireq_2; 
+        meta_t meta_r_1;
+        meta_t meta_r_2;
+        
+        cache_oper_t cache_oper;
+      
+        associativity_t inst_oper_line;
+    };
+
+    function word_t get_mask(input strobe_t strobe);
+        return {{8{strobe[3]}}, {8{strobe[2]}}, {8{strobe[1]}}, {8{strobe[0]}}};
+    endfunction
+
+    //for INDEX_INVALID, INDEX_STORE_TAG
+    function associativity_t get_line(input addr_t addr);
+        return addr[ASSOCIATIVITY_BITS+INDEX_BITS+OFFSET_BITS+DATA_BITS-1:INDEX_BITS+OFFSET_BITS+DATA_BITS];
+    endfunction
+
+    function tag_t tag_lo_tag(input addr_t addr);
+        return tag_t'(tag_lo[0]);
+    endfunction
+
+    function logic tag_lo_valid(input addr_t addr);
+        return tag_lo[0];
+    endfunction
+
+    function word_t tag_lo_data(input addr_t addr);
+        return word_t'(tag_lo[0]);
+    endfunction
+
 
     //for meta reset
     index_t reset_counter;
@@ -89,13 +121,11 @@ module ICache (
 
     //process
     addr_t process_ireq_1_addr, process_ireq_2_addr;
-    ibus_req_t process_ireq_1, process_ireq_2;
-    meta_t process_meta_r_1, process_meta_r_2;
 
     //state
     state_t state;
 
-    //FETCH 
+    //FETCH
     data_addr_t miss_addr;
     addr_t cbus_addr;
 
@@ -120,10 +150,10 @@ module ICache (
     logic [ASSOCIATIVITY-1:0] hit_1_bits, hit_2_bits;
     associativity_t hit_line_1, hit_line_2;
 
+    //hit & miss
     logic ireq_en;
-    logic en;
-    reg_t process_hit;
 
+    logic en;
 
     //Port1
     logic port_1_en;
@@ -143,16 +173,32 @@ module ICache (
 
     associativity_t replace_line_1_reg, replace_line_2_reg;
 
-    //FSM
-    logic fetch_1_end, fetch_2_end;
+    word_t data_1, data_2;
 
     //防止重复FETCH
     logic same_line;
 
+    //for cache_inst invalid
+    associativity_t index_line;
+    associativity_t inst_oper_line;
+    cache_oper_t cache_oper;
+
+    process_pkg_t cache_handle;
+
+    logic fetch_1_end, fetch_2_end, store_end;
+
+    assign index_line = get_line(ireq_1_addr);
+    assign inst_oper_line = (cache_inst==I_INDEX_INVALID | cache_inst==I_INDEX_STORE_TAG) ? index_line : hit_line_1;
+                       
+    assign cache_oper = ((cache_inst==I_HIT_INVALID & hit_1)|(cache_inst==I_INDEX_INVALID)) ? INVALID
+                        : (cache_inst==I_INDEX_STORE_TAG) ? INDEX_STORE
+                        : (cache_inst==I_UNKNOWN) ? REQ
+                        : NULL;
+
     //第一阶段读meta, 第二阶段写meta
     assign ireq_1_addr = ireq_1.addr;
     assign ireq_2_addr = ireq_2.addr;
-    assign meta_en = (~resetn|state==FETCH_1|state==FETCH_2) ? 1'b1 : 0;
+    assign meta_en = (~resetn|cache_handle.cache_oper==INVALID|state==STORE|state==FETCH_1|state==FETCH_2);
     assign meta_w_addr = resetn ? ((state==FETCH_2) ? process_ireq_2_addr.index
                                                     : process_ireq_1_addr.index)
                                 : reset_counter[INDEX_BITS-1:0];
@@ -165,38 +211,69 @@ module ICache (
     assign meta_r_addr_2 = ireq_2_addr.index;
     assign meta_r_1 = meta_ram[meta_r_addr_1];
     assign meta_r_2 = meta_ram[meta_r_addr_2];
+
     //meta_w
     always_comb begin
         meta_w = '0;
         if (resetn) begin
-            unique case (state)
-                FETCH_1: begin
-                    meta_w = process_meta_r_1;
+            unique case (cache_handle.cache_oper)
+                INVALID: begin
+                    meta_w = cache_handle.meta_r_1;
                     for (int i = 0; i < ASSOCIATIVITY; i++) begin
-                        if (process_replace_line_1 == associativity_t'(i)) begin
-                            meta_w[i].tag = process_ireq_1_addr.tag;
-                            meta_w[i].valid = 1'b1;
-                        end
-                        else begin
-                        end
-                    end
-                    
-                end
-                FETCH_2: begin
-                    meta_w = process_meta_r_2;
-                    for (int i = 0; i < ASSOCIATIVITY; i++) begin
-                        if (process_replace_line_2 == associativity_t'(i)) begin
-                            meta_w[i].tag = process_ireq_2_addr.tag;
-                            meta_w[i].valid = 1'b1;
+                        if (cache_handle.inst_oper_line == associativity_t'(i)) begin
+                            meta_w[i].valid = 1'b0;
                         end
                         else begin
                         end
                     end
                 end
-                
-                default: begin   
+
+                INDEX_STORE: begin
+                    meta_w = cache_handle.meta_r_1;
+                    for (int i = 0; i < ASSOCIATIVITY; i++) begin
+                        if (cache_handle.inst_oper_line == associativity_t'(i) & en) begin
+                            meta_w[i].valid = tag_lo_valid(tag_lo);
+                            meta_w[i].tag = tag_lo_tag(tag_lo);
+                        end
+                        else begin
+                        end
+                    end
                 end
-            endcase    
+
+                REQ: begin
+                    unique case (state)
+                        FETCH_1: begin
+                            meta_w = cache_handle.meta_r_1;
+                            for (int i = 0; i < ASSOCIATIVITY; i++) begin
+                                if (process_replace_line_1 == associativity_t'(i)) begin
+                                    meta_w[i].tag = process_ireq_1_addr.tag;
+                                    meta_w[i].valid = 1'b1;
+                                end
+                                else begin
+                                end
+                            end
+                            
+                        end
+                        FETCH_2: begin
+                            meta_w = cache_handle.meta_r_2;
+                            for (int i = 0; i < ASSOCIATIVITY; i++) begin
+                                if (process_replace_line_2 == associativity_t'(i)) begin
+                                    meta_w[i].tag = process_ireq_2_addr.tag;
+                                    meta_w[i].valid = 1'b1;
+                                end
+                                else begin
+                                end
+                            end
+                        end
+                        
+                        default: begin   
+                        end
+                    endcase     
+                end
+
+                default: begin
+                end
+            endcase   
         end
         else begin
         end
@@ -226,7 +303,8 @@ module ICache (
         end
     end
     
-    assign ireq_en = ~ireq_1.valid|(hit_1 & hit_2);
+    assign ireq_en = (cache_inst==I_UNKNOWN & (~ireq_1.valid|(hit_1 & hit_2)))
+                    | cache_inst==I_HIT_INVALID | cache_inst==I_INDEX_INVALID;
 
 
     always_ff @(posedge clk) begin
@@ -246,50 +324,49 @@ module ICache (
     always_ff @(posedge clk) begin
         if (resetn) begin
             if (en) begin
-                process_hit.hit_1 <= hit_1;
-                process_hit.hit_2 <= hit_2;
-                process_hit.hit_line_1 <= hit_line_1;
-                process_hit.hit_line_2 <= hit_line_2;
-                process_hit.ireq_en <= ireq_en;
-                process_ireq_1 <= ireq_1;
-                process_ireq_2 <= ireq_2;
-                process_meta_r_1 <= meta_r_1;
-                process_meta_r_2 <= meta_r_2;   
+                cache_handle.hit_1 <= hit_1;
+                cache_handle.hit_2 <= hit_2;
+                cache_handle.hit_line_1 <= hit_line_1;
+                cache_handle.hit_line_2 <= hit_line_2;
+                cache_handle.ireq_en <= ireq_en;
+
+                cache_handle.ireq_1 <= ireq_1;
+                cache_handle.ireq_2 <= ireq_2;
+                cache_handle.meta_r_1 <= meta_r_1;
+                cache_handle.meta_r_2 <= meta_r_2;   
+
+                cache_handle.cache_oper <= cache_oper;
+                cache_handle.inst_oper_line <= inst_oper_line;
             end
             
         end
         else begin
-            process_hit <= '0;
-            process_ireq_1 <= '0;
-            process_ireq_2 <= '0;
-            process_meta_r_1 <= '0;
-            process_meta_r_2 <= '0; 
+            cache_handle <= '0;
         end
     end
 
 
 
     //PLRU 
-    assign process_ireq_1_addr = process_ireq_1.addr;
-    assign process_ireq_2_addr = process_ireq_2.addr;
-
+    assign process_ireq_1_addr = cache_handle.ireq_1.addr;
+    assign process_ireq_2_addr = cache_handle.ireq_2.addr;
     
     assign index_equal = process_ireq_1_addr.index==process_ireq_2_addr.index;
-    assign process_replace_line_1 = (index_equal & process_hit.hit_2) ? ~process_hit.hit_line_2 : plru[process_ireq_1_addr.index];
-    assign process_replace_line_2 = (index_equal & process_hit.hit_1) ? ~process_hit.hit_line_1 : plru[process_ireq_2_addr.index];
+    assign process_replace_line_1 = (index_equal & cache_handle.hit_2) ? ~cache_handle.hit_line_2 : plru[process_ireq_1_addr.index];
+    assign process_replace_line_2 = (index_equal & cache_handle.hit_1) ? ~cache_handle.hit_line_1 : plru[process_ireq_2_addr.index];
                                         
     always_comb begin
         plru_new = plru;
         for (int i = 0; i < SET_NUM; i++) begin         
-            if (process_hit.hit_1 & process_ireq_1.valid) begin
-                plru_new[i] = process_ireq_1_addr.index == index_t'(i) ? ~process_hit.hit_line_1 : plru[i];
+            if (cache_handle.hit_1 & cache_handle.ireq_1.valid) begin
+                plru_new[i] = process_ireq_1_addr.index == index_t'(i) ? ~cache_handle.hit_line_1 : plru[i];
             end
             else if (state==FETCH_1 & icresp.last) begin
                 plru_new[i] = process_ireq_1_addr.index == index_t'(i) ? ~process_replace_line_1 : plru[i];
             end
 
-            if (process_hit.hit_2 & process_ireq_2.valid) begin
-                plru_new[i] = process_ireq_2_addr.index == index_t'(i) ? ~process_hit.hit_line_2 : plru[i];
+            if (cache_handle.hit_2 & cache_handle.ireq_2.valid) begin
+                plru_new[i] = process_ireq_2_addr.index == index_t'(i) ? ~cache_handle.hit_line_2 : plru[i];
             end
             else if (state==FETCH_2 & icresp.last) begin
                 plru_new[i] = process_ireq_2_addr.index == index_t'(i) ? ~process_replace_line_2 : plru[i];
@@ -297,7 +374,7 @@ module ICache (
         end
     end
     always_ff @(posedge clk) begin
-        if (resetn) begin
+        if (resetn & cache_handle.cache_oper==REQ) begin
             plru <= plru_new;
         end
         else begin
@@ -323,9 +400,9 @@ module ICache (
         end
     end
 
-
-    assign finish_state = (process_ireq_2.valid & ~process_hit.hit_2 & ~same_line) ? FETCH_2 : FETCH_1;
-    assign finish = state==finish_state & icresp.last;
+    assign finish_state = (cache_handle.ireq_2.valid & ~cache_handle.hit_2 & ~same_line) ? FETCH_2 : FETCH_1;
+    assign finish = (cache_handle.cache_oper==REQ&state==finish_state & icresp.last)
+                    | (cache_handle.cache_oper==STORE&(&miss_addr.offset));
     
 
     always_ff @(posedge clk) begin
@@ -339,26 +416,24 @@ module ICache (
 
 
     //Port 1 : ireq_1 
-    assign port_1_en = (process_hit.ireq_en | finish_reg);       
+    assign port_1_en = (cache_handle.ireq_en | finish_reg);       
     assign port_1_wen = '0;                    
-    assign port_1_addr.line = process_hit.hit_1 ? process_hit.hit_line_1 : replace_line_1_reg;   
+    assign port_1_addr.line = cache_handle.hit_1 ? cache_handle.hit_line_1 : replace_line_1_reg;   
     assign port_1_addr.index = process_ireq_1_addr.index;   
     assign port_1_addr.offset = process_ireq_1_addr.offset;                   
     assign port_1_data_w = '0;
                                   
 
     //Port 2 : ireq_2 & cbus
-    assign port_2_en = (state==IDLE) ? (process_hit.ireq_en | finish_reg) : 1'b1;
-    assign port_2_wen = (state==FETCH_1|state==FETCH_2) ? {BYTE_PER_DATA{1'b1}} : '0;
-    assign port_2_addr = (state==IDLE) ? (process_hit.hit_2 ? {process_hit.hit_line_2, process_ireq_2_addr.index, process_ireq_2_addr.offset} 
+    assign port_2_en = (state==IDLE) ? (cache_handle.ireq_en | finish_reg) : 1;
+    assign port_2_wen = (state==FETCH_1|state==FETCH_2|state==STORE) ? {BYTE_PER_DATA{1'b1}} : '0;
+    assign port_2_addr = (state==IDLE) ? (cache_handle.hit_2 ? {cache_handle.hit_line_2, process_ireq_2_addr.index, process_ireq_2_addr.offset} 
                                                             : {replace_line_2_reg, process_ireq_2_addr.index, process_ireq_2_addr.offset})
                                        : miss_addr;
-    assign port_2_data_w = (state==FETCH_1|state==FETCH_2) ? icresp.data : '0;
+    assign port_2_data_w = (state==STORE) ? tag_lo_data(tag_lo) : icresp.data;
 
 
-
-
-    assign same_line = process_ireq_1_addr[31:OFFSET_BITS+DATA_BITS]==process_ireq_2_addr[31:OFFSET_BITS+DATA_BITS] & process_ireq_1.valid;
+    assign same_line = process_ireq_1_addr[31:OFFSET_BITS+DATA_BITS]==process_ireq_2_addr[31:OFFSET_BITS+DATA_BITS] & cache_handle.ireq_1.valid;
 
 
     //FSM
@@ -367,16 +442,30 @@ module ICache (
             if (~en) begin
                 unique case (state)
                     IDLE: begin
-                        if (process_ireq_1.valid & ~process_hit.hit_1 & ~fetch_1_end) begin
-                            state <= FETCH_1;
-                            miss_addr <= {process_replace_line_1, process_ireq_1_addr.index, process_ireq_1_addr.offset};
-                        end
-                        else if (process_ireq_2.valid & ~process_hit.hit_2 & ~fetch_2_end & ~same_line) begin
-                            state <= FETCH_2;
-                            miss_addr <= {process_replace_line_2, process_ireq_2_addr.index, process_ireq_2_addr.offset};
-                        end
-                        else begin
-                        end
+                        unique case(cache_handle.cache_oper)
+                            INDEX_STORE: begin
+                                if (~store_end) begin
+                                    state <= STORE;
+                                    miss_addr <= {cache_handle.inst_oper_line, process_ireq_1_addr.index, offset_t'(1'b0)};
+                                end   
+                            end
+
+                            REQ: begin
+                                if (cache_handle.ireq_1.valid & ~cache_handle.hit_1 & ~fetch_1_end) begin
+                                    state <= FETCH_1;
+                                    miss_addr <= {process_replace_line_1, process_ireq_1_addr.index, process_ireq_1_addr.offset};
+                                end
+                                else if (cache_handle.ireq_2.valid & ~cache_handle.hit_2 & ~fetch_2_end & ~same_line) begin
+                                    state <= FETCH_2;
+                                    miss_addr <= {process_replace_line_2, process_ireq_2_addr.index, process_ireq_2_addr.offset};
+                                end
+                                else begin
+                                end        
+                            end
+
+                            default: begin
+                            end
+                        endcase
                     end
 
                     FETCH_1: begin
@@ -387,13 +476,17 @@ module ICache (
                         
                     end
 
-
                     FETCH_2: begin
                         if (icresp.ready) begin
                             state  <= icresp.last ? IDLE : FETCH_2;
                             miss_addr.offset <= miss_addr.offset + 1;  
                         end
                         
+                    end
+
+                    STORE: begin
+                        state <= (&miss_addr.offset) ? IDLE : STORE;
+                        miss_addr.offset <= miss_addr.offset + 1;
                     end
 
                     default: begin   
@@ -414,15 +507,18 @@ module ICache (
             if (finish_reg) begin
                 fetch_1_end <= '0;
                 fetch_2_end <= '0;
+                store_end <= '0;
             end
             else begin
                 fetch_1_end <= state==FETCH_1 ? 1'b1 : fetch_1_end;
                 fetch_2_end <= state==FETCH_2 ? 1'b1 : fetch_2_end;
+                store_end <= state==STORE ? 1'b1 : store_end;
             end
         end
         else begin
             fetch_1_end <= '0;
             fetch_2_end <= '0;
+            store_end <= '0;
         end
     end
 
@@ -479,11 +575,11 @@ module ICache (
         end
     end
 
-
-    //ibus 
+    //DBus 
     assign iresp.addr_ok = en;
     assign iresp.data_ok = data_ok_reg;
     assign iresp.data = {port_2_data_r, port_1_data_r};
+
 
 
     //CBus
