@@ -3,7 +3,7 @@
 
 `include "common.svh"
 `ifdef VERILATOR
-`include "ICache.sv"
+`include "icache.sv"
 `include "DCache.sv"
 `include "../../util/CBusArbiter.sv"
 `endif 
@@ -110,7 +110,7 @@ module cache_manage (
         .mmu_exc  
     );
 
-    ICache icache (
+    icache icache (
         .clk, 
         .resetn,
         .ireq_1(mmu_ireq_1),
