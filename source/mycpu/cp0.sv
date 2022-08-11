@@ -86,7 +86,7 @@ module cp0
 		if (reset) begin
 			regs <= '0;
 			regs.config0<=32'h80000480;
-			regs.config1<=32'h1e693480;
+			regs.config1<=32'h20693480;
 			regs.prid<=32'h00004220;
 			regs.ebase.one<='1;
 			soft_int_pc<='0;
@@ -126,7 +126,7 @@ module cp0
 		end else if (ra[2:0]==3'b001) begin
 			unique case(ra[7:3])
 			5'd15: rd=  {2'b10,regs.ebase.ebase,12'b0};
-			5'd16: rd = 32'h1e693480;
+			5'd16: rd = 32'h20693480;
 			default:;
 
 			endcase
@@ -159,7 +159,7 @@ module cp0
 		end else if (raM[2:0]==3'b001) begin
 			unique case(raM[7:3])
 			5'd15: rdM=  {2'b10,regs.ebase.ebase,12'b0};
-			5'd16: rdM = 32'h1e693480;
+			5'd16: rdM = 32'h20693480;
 			default:;
 
 			endcase
