@@ -202,7 +202,7 @@
 
     assign dataE[1].branch_taken=(dataI[1].ctl.jump&&~(dataI[1].pre_b&&dataI[1].pre_pc==target))
     ||(dataI[1].ctl.branch&&branch_condition&&~dataI[1].pre_b)
-    ||(dataI[1].ctl.branch&&~branch_condition&&dataI[1].pre_b);
+    ||(dataI[1].ctl.branch&&~branch_condition&&dataI[1].pre_b)||dataI[1].ctl.tlb;
 
     for (genvar i=0; i<2; ++i) begin
         assign dataE[i].srcb=rd2[i];
@@ -341,6 +341,10 @@
             if (load_misalign[0]) begin
                 dataE[0].ctl.memtoreg='0;
             end else if (store_misalign[0]) begin
+                dataE[0].ctl.memwrite='0;
+            end
+
+            if (dataI[1].cp0_ctl.ctype==EXCEPTION||exception_of[1]) begin
                 dataE[0].ctl.memwrite='0;
             end
 
