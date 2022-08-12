@@ -13,8 +13,8 @@ module MyArbiter #(
 
     input  cbus_req_t  [MAX_INDEX:0] ireqs,
     output cbus_resp_t [MAX_INDEX:0] iresps,
-    (*mark_debug = "true"*)output cbus_req_t  oreq,
-    (*mark_debug = "true"*)input  cbus_resp_t oresp
+    output cbus_req_t  oreq,
+    input  cbus_resp_t oresp
 );
 
     // logic busy;
@@ -22,8 +22,8 @@ module MyArbiter #(
         IDLE, BUSY, JUDGE
     };
 
-    (*mark_debug = "true"*)state_t state;
-    (*mark_debug = "true"*)index_t index, select;
+    state_t state;
+    index_t index, select;
 
     always_comb begin
         select = 0;

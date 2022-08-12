@@ -34,7 +34,9 @@ module cp0
 	input u1 d_write,
 	input tlb_type_t tlb_type,
 	input mmu_resp_t mmu_resp,
-	output word_t entrance
+	output word_t entrance,
+	output u1 is_int,
+	input u1 int_slot
 	// input dataM2_save_t dataM2_save[1:0]
 );
 	u1 double;
@@ -59,6 +61,7 @@ module cp0
 	// 		end
 	// 	end
 	// end
+	assign is_int=interrupt||int_saved;
 
 	typedef struct packed {
 		word_t pc;
@@ -86,7 +89,7 @@ module cp0
 		if (reset) begin
 			regs <= '0;
 			regs.config0<=32'h80000480;
-			regs.config1<=32'h20693480;
+			regs.config1<=32'h1e693480;
 			regs.prid<=32'h00004220;
 			regs.ebase.one<='1;
 			soft_int_pc<='0;
@@ -121,12 +124,13 @@ module cp0
 			5'd14: rd = regs.epc;
 			5'd15: rd = 32'h00004220;
 			5'd16: rd = {28'h8000048,1'b0,regs.config0[2:0]};
+			5'd30: rd = regs.error_epc;
 			default: rd = '0;
 		endcase
 		end else if (ra[2:0]==3'b001) begin
 			unique case(ra[7:3])
 			5'd15: rd=  {2'b10,regs.ebase.ebase,12'b0};
-			5'd16: rd = 32'h20693480;
+			5'd16: rd = 32'h1e693480;
 			default:;
 
 			endcase
@@ -154,12 +158,13 @@ module cp0
 			5'd14: rdM = regs.epc;
 			5'd15: rdM = 32'h00004220;
 			5'd16: rdM = {28'h8000048,1'b0,regs.config0[2:0]};
+			5'd30: rdM = regs.error_epc;
 			default: rdM = '0;
 		endcase
 		end else if (raM[2:0]==3'b001) begin
 			unique case(raM[7:3])
 			5'd15: rdM=  {2'b10,regs.ebase.ebase,12'b0};
-			5'd16: rdM = 32'h20693480;
+			5'd16: rdM = 32'h1e693480;
 			default:;
 
 			endcase
@@ -208,10 +213,20 @@ module cp0
 			regs_nxt.count = regs.count + 1;
 		end
 
-	
-
-
-		if (ctype==EXCEPTION||((interrupt||int_saved)&&inter_valid)) begin
+		if ((interrupt||int_saved)&&inter_valid) begin
+			regs_nxt.cause.exc_code=EXCCODE_INT;
+			if (~regs.status.exl) begin
+				if (~int_slot) begin
+					regs_nxt.epc=int_pc;
+					regs_nxt.cause.bd='0;
+				end else begin
+					regs_nxt.epc=int_pc-4;
+					regs_nxt.cause.bd='1;
+				end
+			end
+		regs_nxt.status.exl='1;
+			
+		end else if (ctype==EXCEPTION) begin
 			if ((code==EXCCODE_ADEL&&etype.badVaddrF)||(code==EXCCODE_TLBL&&|i_tlb_exc)) begin
 				regs_nxt.bad_vaddr=pc;
 			end else if ((code==EXCCODE_ADEL&&etype.adelD)||code==EXCCODE_ADES||code==EXCCODE_TLBS||(code==EXCCODE_TLBL&&|d_tlb_exc)) begin
@@ -227,10 +242,10 @@ module cp0
 			regs_nxt.cause.exc_code=code;
 			if (~regs.status.exl) begin
 				if (~is_slot) begin
-					regs_nxt.epc= (interrupt||int_saved)&&inter_valid? int_pc:pc;
+					regs_nxt.epc= pc;
 					regs_nxt.cause.bd='0;
 				end else begin
-					regs_nxt.epc=(interrupt||int_saved)&&inter_valid? int_pc:pc-4;
+					regs_nxt.epc=pc-4;
 					regs_nxt.cause.bd='1;
 				end
 			end
@@ -268,6 +283,7 @@ module cp0
 					// 5'd15: regs_nxt.prid=wd;
 					5'd16: regs_nxt.config0[2:0] = wd[2:0];
 					5'd28: regs_nxt.tag_lo=wd;
+					5'd30: regs_nxt.error_epc=wd;
 					// 5'd33: regs_nxt.ebase=wd;
 					default:;
 				endcase

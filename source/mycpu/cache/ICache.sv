@@ -91,7 +91,7 @@ module ICache (
     logic ireq_hit;
     logic en;
 
-    (*mark_debug = "true"*)data_addr_t miss_addr;
+    data_addr_t miss_addr;
 
     //plru
     plru_t [SET_NUM-1 : 0] plru, plru_new;
@@ -100,13 +100,13 @@ module ICache (
     //Port 1 : ireq_1 
     logic port_1_en;
     strobe_t port_1_wen;
-    (*mark_debug = "true"*)data_addr_t port_1_addr;
+    data_addr_t port_1_addr;
     word_t port_1_data_w, port_1_data_r;
 
     //Port 2 : ireq_2 & cbus
     logic port_2_en;
     strobe_t port_2_wen;
-    (*mark_debug = "true"*)data_addr_t port_2_addr;
+    data_addr_t port_2_addr;
     word_t port_2_data_w, port_2_data_r;
 
     logic data_ok_reg;
@@ -114,7 +114,7 @@ module ICache (
     logic store_end;
 
     //for cache_inst invalid
-    (*mark_debug = "true"*)cache_oper_t cache_oper;
+    cache_oper_t cache_oper;
     associativity_t index_line;
     associativity_t invalid_line;
 
@@ -184,7 +184,9 @@ module ICache (
                                 : reset_counter[INDEX_BITS-1:0];
 
     assign meta_addr_2 = ireq_2_addr.index;
-    assign meta_en = (~resetn|((state==FETCH_1|state==FETCH_2)&icresp.last));
+    assign meta_en = ~resetn
+                    |((state==FETCH_1|state==FETCH_2)&icresp.last)
+                    |((cache_oper==INVALID|cache_oper==INDEX_STORE)&state==IDLE);
 
     always_comb begin
         meta_w = meta_r_1;

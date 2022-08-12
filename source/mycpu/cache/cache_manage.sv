@@ -17,8 +17,8 @@ module cache_manage (
     input dbus_req_t dreq_2,
     output dbus_resp_t dresp,
 
-    (*mark_debug = "true"*)output cbus_req_t  creq,
-    (*mark_debug = "true"*)input cbus_resp_t cresp,
+    output cbus_req_t  creq,
+    input cbus_resp_t cresp,
 
     input icache_inst_t icache_inst,
     input dcache_inst_t dcache_inst,
