@@ -481,7 +481,7 @@ Disassembly of section .data:
      ca4:	e4bf023c 	lui	v0,0xbfe4
      ca8:	05004390 	lbu	v1,5(v0)
      cac:	20006330 	andi	v1,v1,0x20
-     cb0:	fdff6010 	beqz	v1,0xca8
+     cb0:	fdff6010 	beqz	v1,0xca8 //nop
      cb4:	00000000 	nop
      cb8:	000044a0 	sb	a0,0(v0)
      cbc:	0800e003 	jr	ra
@@ -549,7 +549,7 @@ Disassembly of section .data:
      db4:	002048bc 	cache	0x8,8192(v0)
      db8:	003048bc 	cache	0x8,12288(v0)
      dbc:	20004224 	addiu	v0,v0,32
-     dc0:	f6ff4314 	bne	v0,v1,0xd9c
+     dc0:	f6ff4314 	bne	v0,v1,0xd9c//zero
      dc4:	00000000 	nop
      dc8:	0800e003 	jr	ra
      dcc:	00000000 	nop

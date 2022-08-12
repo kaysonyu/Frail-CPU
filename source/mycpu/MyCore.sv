@@ -122,7 +122,7 @@ module MyCore (
 	assign ireq.valid=  dataE[1].ctl.cache_i||~pc_except /*|| is_eret||is_EXC || excpM*/;
     assign reset=~resetn;
 
-    (*mark_debug = "true"*)fetch_data_t [1:0] dataF2_nxt ;
+    fetch_data_t [1:0] dataF2_nxt ;
     fetch_data_t [1:0] dataF2 ;
     decode_data_t [1:0] dataD_nxt ,dataD ;
     issue_data_t [1:0] dataI_nxt,dataI;
@@ -307,8 +307,8 @@ module MyCore (
         .en(~stallF2),
         .flush(flushF2)
     );
-    (*mark_debug = "true"*)u1 rawinstr_saved;
-    (*mark_debug = "true"*)u64  raw_instrf2_save;
+    u1 rawinstr_saved;
+    u64  raw_instrf2_save;
     tlb_exc_t [1:0] i_tlb_exc_save;
     u1 delay_flushF2;
     // u1 delay_zeroprej;

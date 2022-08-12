@@ -10,13 +10,13 @@
 module DCache (
     input logic clk, resetn,
 
-    input  dbus_req_t  dreq_1,
-    input logic dreq_1_is_uncached,
-    input  dbus_req_t  dreq_2,
-    input logic dreq_2_is_uncached,
-    output dbus_resp_t dresp,
-    output cbus_req_t  dcreq,
-    input  cbus_resp_t dcresp,
+    (*mark_debug = "true"*)input  dbus_req_t  dreq_1,
+    (*mark_debug = "true"*)input logic dreq_1_is_uncached,
+    (*mark_debug = "true"*)input  dbus_req_t  dreq_2,
+    (*mark_debug = "true"*)input logic dreq_2_is_uncached,
+    (*mark_debug = "true"*)output dbus_resp_t dresp,
+    (*mark_debug = "true"*)output cbus_req_t  dcreq,
+    (*mark_debug = "true"*)input  cbus_resp_t dcresp,
 
     input dcache_inst_t cache_inst,
     input cp0_taglo_t tag_lo
@@ -133,7 +133,7 @@ module DCache (
     addr_t process_dreq_1_addr, process_dreq_2_addr;
 
     //state
-    state_t state;
+    (*mark_debug = "true"*)state_t state;
 
     //FETCH & WRITEBACK
     data_addr_t miss_addr;
@@ -208,7 +208,7 @@ module DCache (
     associativity_t replace_line_1_reg, replace_line_2_reg;
 
     //uncache_data 寄存器
-    word_t uncached_data_1, uncached_data_2;
+    (*mark_debug = "true"*)word_t uncached_data_1, uncached_data_2;
 
 
     //FSM
@@ -217,7 +217,7 @@ module DCache (
 
     logic wb_dirty;
 
-    word_t data_1, data_2;
+    (*mark_debug = "true"*)word_t data_1, data_2;
 
     //防止重复FETCH
     logic same_line;
@@ -230,7 +230,7 @@ module DCache (
     associativity_t inst_oper_line;
     cache_oper_t cache_oper;
 
-    process_pkg_t cache_handle;
+    (*mark_debug = "true"*)process_pkg_t cache_handle;
 
     assign index_line = get_line(dreq_1_addr);
     assign inst_oper_line = (cache_inst==D_INDEX_WRITEBACK_INVALID | cache_inst==D_INDEX_STORE_TAG) ? index_line : hit_line_1;
