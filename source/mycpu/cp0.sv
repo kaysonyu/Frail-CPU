@@ -51,7 +51,7 @@ module cp0
 		offset=32'h180;
 		/*if (has_int&&regs.cause.iv) begin
 			offset=32'h200;
-		end */if ((i_tlb_exc.refill||d_tlb_exc.refill)&&regs.status.exl) begin
+		end */if ((i_tlb_exc.refill||d_tlb_exc.refill)&&~regs.status.exl) begin
 			offset=32'h0;
 		end
 	end
