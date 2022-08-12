@@ -342,49 +342,48 @@ module decoder (
                 ctl.memtype=MEMR;
             end
             `OP_CACHE: begin
-                ctl.alusrc=IMM;
-                ctl.alufunc=ALU_ADDU;
-                srcrega=rs;
-                ctl.cache='1;
-                ctl.single_issue='1;
+                // ctl.alusrc=IMM;
+                // ctl.alufunc=ALU_ADDU;
+                // srcrega=rs;
+                // ctl.cache='1;
+                // ctl.single_issue='1;
                 
-				case(instr[20:16])
-                    `I_INDEX_INVALID:begin
-                        cache_ctl.icache_inst=I_INDEX_INVALID;
-                        ctl.cache_i='1;
-                    end
-                    `I_INDEX_STORE_TAG:begin
-                        cache_ctl.icache_inst=I_INDEX_STORE_TAG;
-                        ctl.cache_i='1;
-                        cp0ra={5'd28,3'b000};
+				// case(instr[20:16])
+                //     `I_INDEX_INVALID:begin
+                //         cache_ctl.icache_inst=I_INDEX_INVALID;
+                //         ctl.cache_i='1;
+                //     end
+                //     `I_INDEX_STORE_TAG:begin
+                //         cache_ctl.icache_inst=I_INDEX_STORE_TAG;
+                //         ctl.cache_i='1;
+                //         cp0ra={5'd28,3'b000};
+                //     end
+                //     `I_HIT_INVALID:begin
+                //         cache_ctl.icache_inst=I_HIT_INVALID;
+                //         ctl.cache_i='1;
 
-                    end
-                    `I_HIT_INVALID:begin
-                        cache_ctl.icache_inst=I_HIT_INVALID;
-                        ctl.cache_i='1;
+                //     end
+                //     `D_INDEX_WRITEBACK_INVALID:begin
+                //         cache_ctl.dcache_inst=D_INDEX_WRITEBACK_INVALID;
+                //         ctl.cache_d='1;
+                //     end
+                //     `D_INDEX_STORE_TAG:begin
+                //         cache_ctl.dcache_inst=D_INDEX_STORE_TAG;
+                //         ctl.cache_d='1;
+                //         cp0ra={5'd28,3'b000};
+                //     end
+                //     `D_HIT_INVALID:begin
+                //         cache_ctl.dcache_inst=D_HIT_INVALID;
+                //         ctl.cache_d='1;
 
-                    end
-                    `D_INDEX_WRITEBACK_INVALID:begin
-                        cache_ctl.dcache_inst=D_INDEX_WRITEBACK_INVALID;
-                        ctl.cache_d='1;
-                    end
-                    `D_INDEX_STORE_TAG:begin
-                        cache_ctl.dcache_inst=D_INDEX_STORE_TAG;
-                        ctl.cache_d='1;
-                        cp0ra={5'd28,3'b000};
-                    end
-                    `D_HIT_INVALID:begin
-                        cache_ctl.dcache_inst=D_HIT_INVALID;
-                        ctl.cache_d='1;
+                //     end
+                //     `D_HIT_WRITEBACK_INVALID:begin
+                //         cache_ctl.dcache_inst=D_HIT_WRITEBACK_INVALID;
+                //         ctl.cache_d='1;
 
-                    end
-                    `D_HIT_WRITEBACK_INVALID:begin
-                        cache_ctl.dcache_inst=D_HIT_WRITEBACK_INVALID;
-                        ctl.cache_d='1;
-
-                    end
-                    default: ;
-                endcase
+                //     end
+                //     default: ;
+                // endcase
 			end    
             `OP_COP0: begin
                 case (instr[25:21])
@@ -397,31 +396,31 @@ module decoder (
                                 srcregb = '0;
                                 destreg = '0;
                             end
-                            `CP_TLBP:begin
-                                ctl.tlb='1;
-                                ctl.single_issue='1;
-                                ctl.tlb_type=TLBP;
-                            end
-                            `CP_TLBR:begin
-                                ctl.tlb='1;
-                                ctl.single_issue='1;
-                                ctl.tlb_type=TLBR;
-                            end
+                            // `CP_TLBP:begin
+                            //     ctl.tlb='1;
+                            //     ctl.single_issue='1;
+                            //     ctl.tlb_type=TLBP;
+                            // end
+                            // `CP_TLBR:begin
+                            //     ctl.tlb='1;
+                            //     ctl.single_issue='1;
+                            //     ctl.tlb_type=TLBR;
+                            // end
                             `CP_TLBWI:begin
-                                ctl.tlb='1;
-                                ctl.single_issue='1;
-                                ctl.tlb_type=TLBWI;
+                                // ctl.tlb='1;
+                                // ctl.single_issue='1;
+                                // ctl.tlb_type=TLBWI;
                             end
-                            `CP_TLBWR:begin
-                                ctl.tlb='1;
-                                ctl.single_issue='1;
-                                ctl.tlb_type=TLBWR;
-                            end
-                            `CP_WAIT:begin
-                                ctl.wait_signal='1;
-                                ctl.single_issue='1;
-                                ctl.alufunc=ALU_PASSA;
-                            end
+                            // `CP_TLBWR:begin
+                            //     ctl.tlb='1;
+                            //     ctl.single_issue='1;
+                            //     ctl.tlb_type=TLBWR;
+                            // end
+                            // `CP_WAIT:begin
+                            //     ctl.wait_signal='1;
+                            //     ctl.single_issue='1;
+                            //     ctl.alufunc=ALU_PASSA;
+                            // end
                             default:begin
                                 exception_ri = 1'b1;
                                 ctl.op = RESERVED;
@@ -840,6 +839,9 @@ module decoder (
                     end
                     default:;
                 endcase
+            end
+            `OP_PREF:begin
+                
             end
             default: begin
                 exception_ri = 1'b1;

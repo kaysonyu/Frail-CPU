@@ -49,9 +49,11 @@ module MyCore (
     u1 i_tlb_exc_bit;
     assign i_tlb_exc_bit='1;
     
-    u1 stallF,stallD,flushD,flushE,flushM,stallM,stallE,flushW,stallM2,flushF2,flushI,flush_que,stallF2,flushM2,stallI,stallI_de,flushM3,pred_flush_que;;
+    u1 stallF,stallD,flushD,flushE,flushM,stallM,stallE,flushW,stallM2,flushF2,flushI,flush_que,stallF2,flushM2,stallI,stallI_de,flushM3,pred_flush_que;
     u1 is_eret;
-    u1 i_wait,d_wait,e_wait;
+    u1 i_wait;
+    u1 d_wait;
+    u1 e_wait;
     u1 is_INTEXC,is_EXC;
     word_t epc;
     u1 excpM,overflowI;
@@ -71,7 +73,6 @@ module MyCore (
     // assign is_jr_ra_issue=candidate1.ctl.op==JR&&candidate1.ra1==31&&~issue_en_1&&~jr_pred_finish&&~candidate2_invalid;
     // (dataD_nxt[1].ctl.op==JR&&dataD_nxt[1].ra1==31)||(dataD_nxt[0].ctl.op==JR&&dataD_nxt[0].ra1==31);
     u1 jrI;
-    assign jrI=is_jr_ra_issue&&~jr_ra_fail;
     // assign jrI='0;
 
     // u1 save_slotD;
@@ -122,13 +123,15 @@ module MyCore (
 	assign ireq.valid=  dataE[1].ctl.cache_i||~pc_except /*|| is_eret||is_EXC || excpM*/;
     assign reset=~resetn;
 
-    fetch_data_t [1:0] dataF2_nxt ,dataF2 ;
+    fetch_data_t [1:0] dataF2_nxt ;
+    fetch_data_t [1:0] dataF2 ;
     decode_data_t [1:0] dataD_nxt ,dataD ;
     issue_data_t [1:0] dataI_nxt,dataI;
     execute_data_t [1:0] dataE_nxt,dataE;
     execute_data_t [1:0] dataM1_nxt,dataM1;
     execute_data_t [1:0] dataM2_nxt,dataM2;
-    memory_data_t [1:0] dataM3_nxt,dataM3;
+    memory_data_t [1:0] dataM3_nxt;
+    memory_data_t [1:0] dataM3;
 
     // always_comb begin
     assign pc_succ=dataP_pc+8;
@@ -137,12 +140,13 @@ module MyCore (
     //     end
     // end
 
-    word_t jpc_save,ipc_save,pc_nxt,jrpc_save,icache_addr_save;
+    word_t jpc_save,ipc_save,jrpc_save,icache_addr_save;
+    word_t pc_nxt;
     u1 jpc_saved,ipc_saved,jrpc_saved,icache_addr_saved;
     always_ff @(posedge clk) begin
         if (reset) begin
             {jpc_save,ipc_save,jrpc_save,jpc_saved,ipc_saved,jrpc_saved}<='0;
-        end else if ((stallF)&&(is_EXC||is_eret)) begin
+        end else if ((stallF)&&(is_INTEXC||is_eret)) begin
 			ipc_save<=pc_selected;
 			ipc_saved<='1;
         end else if (stallF && (dataE[1].branch_taken||dataE[1].ctl.cache_d||dataE[1].ctl.tlb) ) begin
@@ -174,9 +178,9 @@ module MyCore (
     always_comb begin
         if (ipc_saved) begin
             pc_nxt=ipc_save;
-        end else if (icache_addr_saved&&~is_EXC&&~is_eret) begin
+        end else if (icache_addr_saved&&~is_INTEXC&&~is_eret) begin
             pc_nxt=icache_addr_save;
-        end else if (jpc_saved&&~is_EXC&&~is_eret) begin
+        end else if (jpc_saved&&~is_INTEXC&&~is_eret) begin
             pc_nxt=jpc_save;
         end else if (jrpc_saved&&~(dataE[1].branch_taken||dataE[1].ctl.cache_i||dataE[1].ctl.cache_d||dataE[1].ctl.tlb)&&~is_INTEXC) begin
             pc_nxt=jrpc_save;
@@ -445,14 +449,15 @@ module MyCore (
     always_ff @(posedge clk) begin
         if (reset) begin
             jr_pred_finish<='0;
-        end else if (candidate1.ctl.op==JR&&candidate1.ra1==31&&~candidate2_invalid&&~issue_en_1) begin
+        end else if (candidate1.ctl.op==JR&&candidate1.ra1==31&&~candidate2_invalid&&~issue_en_1&&~(d_wait||e_wait)) begin
             jr_pred_finish<='1;
         end else if (issue_en_1) begin
             jr_pred_finish<='0;
         end
     end
 
-    assign is_jr_ra_issue=candidate1.ctl.op==JR&&candidate1.ra1==31&&~jr_pred_finish&&~candidate2_invalid&&~issue_en_1;
+    assign jrI=is_jr_ra_issue&&~jr_ra_fail;
+    assign is_jr_ra_issue=candidate1.ctl.op==JR&&candidate1.ra1==31&&~jr_pred_finish&&~candidate2_invalid&&~issue_en_1&&~(d_wait||e_wait);
 
     u1 jr_predicted;
     word_t jr_predicted_pc;
@@ -785,7 +790,46 @@ module MyCore (
     u1 inter_valid;
     cp0_regs_t regs_out ;
 
-	assign inter_valid=(~i_wait||dataE[1].ctl.wait_signal)&&dataM3[1].valid;
+    word_t int_pc_save;
+    u1 int_pc_saved;
+    u1 int_slot;
+	always_ff @(posedge clk) begin
+		if (reset) begin
+			int_pc_save<='0;
+            int_pc_saved<='0;
+            int_slot<='0;
+		end else if (dataM3[0].valid&&is_int) begin
+			int_pc_save<=dataM3[0].pc;
+            int_pc_saved<='1;
+            int_slot<=dataM3[0].is_slot;
+        end else if (~dataM3[0].valid&&dataM3[1].valid&&is_int) begin
+			int_pc_save<=dataM3[1].pc;
+            int_pc_saved<='1;
+            int_slot<='0;
+        end else if (~is_int) begin
+            int_pc_save<='0;
+            int_pc_saved<='0;
+            int_slot<='0;
+        end
+	end
+
+    // word_t int_pc;
+    // always_comb begin
+    //     int_pc='0;
+    //     priority case(1'b1)
+    //         ~int_pc_saved&&inter_valid:begin
+    //             int_pc=dataM3[0].valid? dataM3[0].pc:dataM3[1].pc;
+    //         end
+    //         int_pc_saved:begin
+    //             int_pc=int_pc_save;
+    //         end
+            
+    //         default:int_pc='0;
+    //     endcase
+    // end
+
+	assign inter_valid=(~i_wait||dataE[1].ctl.wait_signal)&&int_pc_saved;
+    u1 is_int;
     cp0 cp0(
         .clk,.reset,
         .raM(dataE[1].cp0ra),
@@ -806,14 +850,16 @@ module MyCore (
         .is_INTEXC,
         .inter_valid,
         .is_EXC,
-        .int_pc(dataM3[1].pc),
+        .int_pc(int_pc_save),
         .regs_out,
         .i_tlb_exc(dataM3[valid_n].i_tlb_exc),
         .d_tlb_exc(dataM3[valid_n].d_tlb_exc),
         .d_write(dataM3[valid_n].ctl.memwrite),
         .tlb_type(dataM3[1].ctl.tlb_type),
         .mmu_resp,
-        .entrance
+        .entrance,
+        .is_int,
+        .int_slot
     );
 
     assign mmu_req.index=regs_out.index;
