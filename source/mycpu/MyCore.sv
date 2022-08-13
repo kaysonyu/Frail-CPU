@@ -123,14 +123,14 @@ module MyCore (
 	assign ireq.valid=  dataE[1].ctl.cache_i||~pc_except /*|| is_eret||is_EXC || excpM*/;
     assign reset=~resetn;
 
-    fetch_data_t [1:0] dataF2_nxt ;
+    (*mark_debug = "true"*) fetch_data_t [1:0] dataF2_nxt ;
     fetch_data_t [1:0] dataF2 ;
     decode_data_t [1:0] dataD_nxt ,dataD ;
     issue_data_t [1:0] dataI_nxt,dataI;
-    execute_data_t [1:0] dataE_nxt,dataE;
+    (*mark_debug = "true"*) execute_data_t [1:0] dataE_nxt,dataE;
     execute_data_t [1:0] dataM1_nxt,dataM1;
     execute_data_t [1:0] dataM2_nxt,dataM2;
-    memory_data_t [1:0] dataM3_nxt;
+    (*mark_debug = "true"*) memory_data_t [1:0] dataM3_nxt;
     memory_data_t [1:0] dataM3;
 
     // always_comb begin
@@ -231,7 +231,7 @@ module MyCore (
         // .cache_instE
     );
     //pipereg between pcselect and fetch1
-    fetch1_data_t dataF1_nxt,dataF1;
+    (*mark_debug = "true"*) fetch1_data_t dataF1_nxt,dataF1;
     assign dataF1_nxt.valid='1;
     assign dataF1_nxt.pc=dataP_pc;
     assign dataF1_nxt.cp0_ctl.ctype= pc_except ? EXCEPTION : NO_EXC;

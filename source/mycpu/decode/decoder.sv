@@ -840,7 +840,7 @@ module decoder (
                     default:;
                 endcase
             end
-            `OP_PREF:begin
+            `OP_PREF,`OP_BEQL:begin
                 
             end
             default: begin

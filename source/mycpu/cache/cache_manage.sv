@@ -10,15 +10,15 @@
 module cache_manage (
     input logic clk, resetn,
 
-    input ibus_req_t ireq,
-    output ibus_resp_t iresp,
+    (*mark_debug = "true"*) input ibus_req_t ireq,
+    (*mark_debug = "true"*) output ibus_resp_t iresp,
 
-    input dbus_req_t dreq_1,
-    input dbus_req_t dreq_2,
-    output dbus_resp_t dresp,
+    (*mark_debug = "true"*) input dbus_req_t dreq_1,
+    (*mark_debug = "true"*) input dbus_req_t dreq_2,
+    (*mark_debug = "true"*) output dbus_resp_t dresp,
 
-    output cbus_req_t  creq,
-    input cbus_resp_t cresp,
+    (*mark_debug = "true"*) output cbus_req_t  creq,
+    (*mark_debug = "true"*) input cbus_resp_t cresp,
 
     input icache_inst_t icache_inst,
     input dcache_inst_t dcache_inst,
