@@ -958,7 +958,7 @@ module MyCore (
         v_dreq[1].valid = dcache_inst==D_UNKNOWN & dreq[0].valid;
     end
 
-    assign i_wait = v_ireq[0].valid & ~iresp.addr_ok;
+    assign i_wait = p_ireq[0].valid & ~iresp.addr_ok;
 
     logic [1:0] i_uncache;
 
