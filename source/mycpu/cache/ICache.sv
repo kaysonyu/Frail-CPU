@@ -11,7 +11,9 @@ module ICache (
     input logic clk, resetn,
 
     input  ibus_req_t  ireq_1,
+    input logic ireq_1_is_uncached,
     input  ibus_req_t  ireq_2,
+    input logic ireq_2_is_uncached,
     output ibus_resp_t iresp,
     output cbus_req_t  icreq,
     input  cbus_resp_t icresp,
@@ -59,7 +61,7 @@ module ICache (
     localparam type plru_t = logic [ASSOCIATIVITY-2:0];
 
     localparam type state_t = enum logic[2:0] {
-        IDLE, FETCH_1, FETCH_2, STORE
+        IDLE, FETCH_1, FETCH_2, STORE, UNCACHE_1, UNCACHE_2
     };
 
     addr_t ireq_1_addr, ireq_2_addr;
@@ -112,6 +114,8 @@ module ICache (
     logic data_ok_reg;
 
     logic store_end;
+
+    word_t data_1, data_2;
 
     //for cache_inst invalid
     cache_oper_t cache_oper;
@@ -177,7 +181,8 @@ module ICache (
 
     //if ireq_1 is valid
     assign en = (((cache_inst==I_UNKNOWN&ireq_hit)|cache_inst==I_HIT_INVALID|cache_inst==I_INDEX_INVALID)&state==IDLE)
-                | (state==STORE&(&miss_addr.offset));
+                | (state==STORE&(&miss_addr.offset))
+                | (state==UNCACHE_2&icresp.last);
 
 
     
@@ -313,7 +318,12 @@ module ICache (
                             end
                         end
                         REQ: begin
-                            if (ireq_1.valid & ~hit_1) begin
+                            if (ireq_1.valid & ireq_1_is_uncached) begin
+                                state <= UNCACHE_1;
+
+                            end
+
+                            else if (ireq_1.valid & ~hit_1) begin
                                 state <= FETCH_1;
                                 
                                 miss_addr <= {replace_line_1, ireq_1_addr.index, ireq_1_addr.offset};
@@ -352,6 +362,14 @@ module ICache (
                     miss_addr.offset <= miss_addr.offset + 1;
                 end
 
+                UNCACHE_1: begin
+                    state <= icresp.last ? UNCACHE_2 : UNCACHE_1; 
+                end
+
+                UNCACHE_2: begin
+                    state <= icresp.last ? IDLE : UNCACHE_2; 
+                end
+
                 default: begin   
                 end
             endcase  
@@ -369,6 +387,21 @@ module ICache (
         end
         else begin
             store_end <= '0;
+        end
+    end
+
+    always_ff @(posedge clk) begin
+        if (resetn) begin
+            if (state==UNCACHE_1 & icresp.last) begin
+                data_1 <= icresp.data;
+            end
+            if (state==UNCACHE_2 & icresp.last) begin
+                data_2 <= icresp.data;
+            end   
+        end
+        else begin
+            data_1 <= '0;
+            data_2 <= '0;
         end
     end
 
@@ -423,16 +456,16 @@ module ICache (
     //ibus
     assign iresp.addr_ok = en;
     assign iresp.data_ok = data_ok_reg;
-    assign iresp.data = {port_2_data_r, port_1_data_r};
+    assign iresp.data = {data_2, data_1};
 
     //CBus
-    assign icreq.valid = state==FETCH_1 | state==FETCH_2;     
+    assign icreq.valid = state==FETCH_1 | state==FETCH_2 | state==UNCACHE_1 | state==UNCACHE_2;     
     assign icreq.is_write = 0;  
     assign icreq.size = MSIZE4;      
-    assign icreq.addr = state==FETCH_1 ? ireq_1_addr : ireq_2_addr;      
+    assign icreq.addr = (state==FETCH_1 | state==UNCACHE_1) ? ireq_1_addr : ireq_2_addr;      
     assign icreq.strobe = 0;   
     assign icreq.data = 0;      
-    assign icreq.len = MLEN16;  
+    assign icreq.len = (state==FETCH_1 | state==FETCH_2) ? MLEN16 : MLEN1;  
 
 endmodule
 

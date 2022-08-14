@@ -114,7 +114,9 @@ module cache_manage (
         .resetn,
 
         .ireq_1(p_ireq[0]),
+        .ireq_1_is_uncached(p_ireq[0].valid),
         .ireq_2(p_ireq[1]),
+        .ireq_2_is_uncached(p_ireq[1].valid),
         .iresp,
 
         .icreq(i_cbus_req),
