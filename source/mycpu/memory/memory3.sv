@@ -16,8 +16,7 @@ module memory3
     output memory_data_t [1:0] dataM,
     input  dbus_resp_t dresp,
     input dbus_req_t [1:0] dreq,
-    input logic resetn,
-    input tlb_exc_t [1:0] d_tlb_exc
+    input logic resetn
 );
 u1 uncache;
 assign uncache=dreq[1].addr[29] || dreq[0].addr[29];
@@ -80,8 +79,8 @@ end
 // end
     
 
-readdata readdata1(._rd(  dresp.data[31:0]),.rd(dataM[1].rd),.addr(dataE[1].alu_out[1:0]),.msize(dataE[1].ctl.msize),.mem_unsigned(~dataE[1].ctl.memsext),.original(dataE[1].srcb),.memtype(dataE[1].ctl.memtype));
-readdata readdata2(._rd(  dresp.data[63:32]),.rd(dataM[0].rd),.addr(dataE[0].alu_out[1:0]),.msize(dataE[0].ctl.msize),.mem_unsigned(~dataE[0].ctl.memsext),.original(dataE[0].srcb),.memtype(dataE[0].ctl.memtype));
+readdata readdata1(._rd(  dresp.data[31:0]),.rd(dataM[1].rd),.addr(dataE[1].alu_out[1:0]),.msize(dataE[1].ctl.msize),.mem_unsigned(~dataE[1].ctl.memsext));
+readdata readdata2(._rd(  dresp.data[63:32]),.rd(dataM[0].rd),.addr(dataE[0].alu_out[1:0]),.msize(dataE[0].ctl.msize),.mem_unsigned(~dataE[0].ctl.memsext));
 
     // always_comb begin
     //     dataM.cp0_ctl=dataE.cp0_ctl;
@@ -97,14 +96,12 @@ for (genvar i=0; i<2; ++i) begin
     assign dataM[i].alu_out=dataE[i].alu_out;
     assign dataM[i].valid=dataE[i].valid;
     assign dataM[i].cp0_ctl=dataE[i].cp0_ctl;
-    assign dataM[i].i_tlb_exc=dataE[i].i_tlb_exc;
     assign dataM[i].is_slot=dataE[i].is_slot;
     assign dataM[i].ctl=dataE[i].ctl;
     assign dataM[i].cp0ra=dataE[i].cp0ra;
     assign dataM[i].srcb=dataE[i].srcb;
     assign dataM[i].srca=dataE[i].srca;
     assign dataM[i].hilo=dataE[i].hilo;
-    assign dataM[i].d_tlb_exc=d_tlb_exc[i];
 end
 
 endmodule

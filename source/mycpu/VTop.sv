@@ -1,7 +1,6 @@
 `include "access.svh"
 `include "common.svh"
 `include "cache_pkg.svh"
-`include "mmu_pkg.svh"
 `ifdef VERILATOR
 `include "cache/cache_manage.sv"
 `endif 
@@ -24,10 +23,7 @@ module VTop (
     icache_inst_t icache_inst;
     dcache_inst_t dcache_inst;
     word_t tag_lo;
-    mmu_req_t mmu_req;
-    mmu_resp_t mmu_resp;
-    mmu_exc_out_t mmu_exc_out;
-    u3 config_k0;
+
 
     MyCore core(.*);
     cache_manage cache_manage(
@@ -36,11 +32,6 @@ module VTop (
         .dresp(dresp),
         .creq(oreq),
         .cresp(oresp),
-
-        .mmu_in(mmu_req),
-        .mmu_out(mmu_resp),
-        .mmu_exc(mmu_exc_out),
-
         .*
     );
 

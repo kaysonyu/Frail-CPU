@@ -49,8 +49,6 @@
                 dataW[i].wd='0;
                 if (dataM[i].ctl.memtoreg) begin
                     dataW[i].wd=dataM[i].rd;
-                end else if (dataM[i].ctl.mul) begin
-                    dataW[i].wd=dataM[i].hilo[31:0];
                 end else if (dataM[i].ctl.regwrite) begin
                     dataW[i].wd=dataM[i].alu_out;
                 end else begin
