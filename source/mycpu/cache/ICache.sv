@@ -331,13 +331,13 @@ module ICache (
                             if (ireq_1.valid & ~hit_1) begin
                                 state <= FETCH_1;
                                 
-                                miss_addr <= {replace_line_1, ireq_1_addr.index, ireq_1_addr.offset};
+                                miss_addr <= {replace_line_1, ireq_1_addr.index, offset_t'(1'b0)};
                             end
 
                             else if (hit_1 & ireq_2.valid & ~hit_2) begin
                                 state <= FETCH_2;
                                 
-                                miss_addr <= {replace_line_2, ireq_2_addr.index, ireq_2_addr.offset};
+                                miss_addr <= {replace_line_2, ireq_2_addr.index, offset_t'(1'b0)};
                             end
 
                             else begin
@@ -444,7 +444,7 @@ module ICache (
     assign icreq.valid = state==FETCH_1 | state==FETCH_2;     
     assign icreq.is_write = 0;  
     assign icreq.size = MSIZE4;      
-    assign icreq.addr = state==FETCH_1 ? ireq_1_addr : ireq_2_addr;      
+    assign icreq.addr = state==FETCH_1 ? {ireq_1_addr.tag, ireq_1_addr.index, offset_t'(1'b0), align_t'(1'b0)} : {ireq_2_addr.tag, ireq_2_addr.index, offset_t'(1'b0), align_t'(1'b0)};      
     assign icreq.strobe = 0;   
     assign icreq.data = 0;      
     assign icreq.len = MLEN16;  

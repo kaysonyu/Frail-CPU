@@ -151,7 +151,7 @@ module MyCore (
     end 
 
     always_comb begin
-        dataP_nxt.icache_inst='0;
+        dataP_nxt.icache_inst=I_UNKNOWN;
         dataP_nxt.cache_i='0;
         if (pc_saved&&(forward_pc_type<forward_pctype_save)) begin
             dataP_nxt.pc=pc_save;
@@ -221,7 +221,7 @@ module MyCore (
 		if (reset) begin
 			dataP.pc<=32'hbfc0_0000;//
             dataP.cache_i<='0;
-            dataP.icache_inst<='0;
+            dataP.icache_inst<=I_UNKNOWN;
 		end else if(~stallF) begin
 			dataP.pc<=dataP_nxt.pc;
             dataP.cache_i<=dataP_nxt.cache_i;
