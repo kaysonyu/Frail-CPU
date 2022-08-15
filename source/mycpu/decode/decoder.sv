@@ -113,7 +113,7 @@ module decoder (
                 srcregb = '0;
                 destreg = rt;
             end  
-            `OP_BEQ: begin
+            `OP_BEQ, `OP_BEQL: begin
                 ctl.op = BEQ;
                 ctl.branch = 1'b1;
                 // //jump='1;

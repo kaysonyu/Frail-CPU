@@ -70,6 +70,8 @@ typedef enum logic[3:0] {
 `define OP_SWL          6'b101010
 `define OP_SWR          6'b101110
 
+`define OP_BEQL         6'b010100
+
 `define I_INDEX_INVALID   5'b00000
 `define I_INDEX_STORE_TAG 5'b01000
 `define I_HIT_INVALID     5'b10000
