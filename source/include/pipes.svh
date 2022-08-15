@@ -75,6 +75,7 @@ typedef enum  u2{
 typedef struct packed {
 	word_t pc;
 	u1 cache_i;
+	icache_inst_t icache_inst;
 	
 } pcselect_data_t;
 
