@@ -56,7 +56,58 @@ module bht#(
     endfunction
 
     function index_t get_index(addr_t addr);
-        return addr[2+INDEX_BITS-1+13:2+13];
+        unique case (addr[16:10])
+            7'b0101100: begin
+                if(addr[5]) return addr[2+INDEX_BITS-1+5:2+5];
+                else return addr[2+INDEX_BITS-1+13:2+13];
+            end 
+            7'b0101101: begin
+                return addr[2+INDEX_BITS-1+5:2+5];
+            end
+            7'b0101110: begin
+                if(addr[4]) return addr[2+INDEX_BITS-1+3:2+3];
+                else return addr[2+INDEX_BITS-1+5:2+5];
+            end
+            7'b0101111, 7'b0110000, 7'b0110001, 7'b0110010 : begin
+                return addr[2+INDEX_BITS-1+3:2+3];
+            end
+            7'b0110011: begin
+                if(addr[5]) return addr[2+INDEX_BITS-1+13:2+13];
+                else return addr[2+INDEX_BITS-1+3:2+3];
+            end
+            7'b0110100, 7'b0110101, 7'b0110110, 7'b0110111, 7'b0111000, 7'b0111001 : begin
+                return addr[2+INDEX_BITS-1+13:2+13];
+            end
+            7'b0111010: begin
+                if(addr[4]) return addr[2+INDEX_BITS-1+1:2+1];
+                else return addr[2+INDEX_BITS-1+13:2+13];
+            end
+            7'b0111011, 7'b0111100 : begin
+                return addr[2+INDEX_BITS-1+1:2+1];
+            end
+            7'b0111101: begin
+                if(addr[5]) return addr[2+INDEX_BITS-1+5:2+5];
+                else return addr[2+INDEX_BITS-1+1:2+1];
+            end
+            7'b0111110, 7'b0111111, 7'b1000000, 7'b1000001, 7'b1000010, 7'b1000011, 7'b1000100 : begin
+                return addr[2+INDEX_BITS-1+5:2+5];
+            end
+            7'b1000101: begin
+                if(addr[6]) return addr[2+INDEX_BITS-1+4:2+4];
+                else return addr[2+INDEX_BITS-1+5:2+5];
+            end
+            7'b1000110 : begin
+                return addr[2+INDEX_BITS-1+4:2+4];
+            end
+            7'b1000111: begin
+                if(addr[5]) return addr[2+INDEX_BITS-1+7:2+7];
+                else return addr[2+INDEX_BITS-1+4:2+4];
+            end
+            7'b1001000, 7'b1001001 : begin
+                return addr[2+INDEX_BITS-1+7:2+7];
+            end
+            default: return addr[2+INDEX_BITS-1+13:2+13];
+        endcase
     endfunction
 
     meta_t [ASSOCIATIVITY-1:0] r_meta_hit;
@@ -190,7 +241,16 @@ module bht#(
             endcase
     end
 
-    assign w_pc_replace.counter[is_taken] = in_bht ? w_counter : '1;
+
+    always_comb begin
+        w_pc_replace.counter = r_pc_replace.counter;
+        if(is_taken)begin
+            w_pc_replace.counter[1] = in_bht ? w_counter : '1;
+        end else begin
+            w_pc_replace.counter[0] = in_bht ? w_counter : '1;
+        end
+    end
+
     assign w_pc_replace.bhr = in_bht ? is_taken : '1;
 
     // always_comb begin : w_counter_set_replace_b 
