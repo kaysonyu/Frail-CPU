@@ -122,7 +122,7 @@ module MyCore (
     forward_pc_type_t forward_pc_type;
     //icache，且无stallF时，存下一条
     //icache且有stallF时，存两条
-    icache_inst icache_inst_save;
+    icache_inst_t icache_inst_save;
     always_ff @(posedge clk) begin
         if (reset) begin
             {pc_save,pc_saved,icache_saved,forward_pctype_save,icache_inst_save}<='0;
@@ -221,9 +221,11 @@ module MyCore (
 		if (reset) begin
 			dataP.pc<=32'hbfc0_0000;//
             dataP.cache_i<='0;
+            dataP.icache_inst<='0;
 		end else if(~stallF) begin
 			dataP.pc<=dataP_nxt.pc;
             dataP.cache_i<=dataP_nxt.cache_i;
+            dataP.icache_inst<=dataP_nxt.icache_inst;
 		end
 	end
     // word_t pc_f1;
