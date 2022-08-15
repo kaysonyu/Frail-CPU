@@ -131,9 +131,9 @@ module cache_manage (
         .resetn,
 
         .dreq_1(p_dreq[0]),
-        .dreq_1_is_uncached(d_uncache[0]),
+        .dreq_1_is_uncached(p_dreq[0].valid),
         .dreq_2(p_dreq[1]),
-        .dreq_2_is_uncached(d_uncache[1]),
+        .dreq_2_is_uncached(p_dreq[1].valid),
         .dresp,
 
         .dcreq(d_cbus_req),
