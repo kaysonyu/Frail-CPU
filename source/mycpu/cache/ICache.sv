@@ -66,8 +66,12 @@ module ICache (
 
     index_t reset_counter;
 
-     //state
+    //state
     state_t state;
+
+    logic en_delay;
+
+    icache_inst_t valid_cache_inst;
 
     //meta_ram
     typedef struct packed {
@@ -135,11 +139,22 @@ module ICache (
     endfunction
 
 
-    assign cache_oper = ((cache_inst==I_INDEX_INVALID|(cache_inst==I_HIT_INVALID&hit_1)) & ireq_1.valid)?INVALID
-                        :(cache_inst==I_INDEX_STORE_TAG & ireq_1.valid)?INDEX_STORE
-                        :(cache_inst==I_UNKNOWN & ireq_1.valid)?REQ:NULL;
+    always_ff @(posedge clk) begin
+        if (resetn) begin
+            en_delay <= en;
+        end
+        else begin
+            en_delay <= 1'b1;
+        end
+    end
+
+    assign valid_cache_inst = en_delay ? cache_inst : I_UNKNOWN;
+
+    assign cache_oper = ((valid_cache_inst==I_INDEX_INVALID|(valid_cache_inst==I_HIT_INVALID&hit_1)) & ireq_1.valid)?INVALID
+                        :(valid_cache_inst==I_INDEX_STORE_TAG & ireq_1.valid)?INDEX_STORE
+                        :(valid_cache_inst==I_UNKNOWN & ireq_1.valid)?REQ:NULL;
     assign index_line = get_line(ireq_1_addr);
-    assign invalid_line = (cache_inst == I_INDEX_INVALID) ? index_line : hit_line_1;
+    assign invalid_line = (valid_cache_inst == I_INDEX_INVALID) ? index_line : hit_line_1;
 
     assign ireq_1_addr = ireq_1.addr;
     assign ireq_2_addr = ireq_2.addr;
@@ -176,7 +191,7 @@ module ICache (
     assign ireq_hit = ireq_1.valid & hit_1 & hit_2;
 
     //if ireq_1 is valid
-    assign en = (((cache_inst==I_UNKNOWN&ireq_hit)|cache_inst==I_HIT_INVALID|cache_inst==I_INDEX_INVALID)&state==IDLE)
+    assign en = (((valid_cache_inst==I_UNKNOWN&ireq_hit)|valid_cache_inst==I_HIT_INVALID|valid_cache_inst==I_INDEX_INVALID)&state==IDLE)
                 | (state==STORE&(&miss_addr.offset));
 
 
