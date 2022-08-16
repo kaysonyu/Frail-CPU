@@ -24,7 +24,7 @@ module ICache (
     //1 + 7 + 4 + 2
     localparam DATA_PER_LINE = 16;
     localparam ASSOCIATIVITY = 2;
-    localparam SET_NUM = 128;
+    localparam SET_NUM = 64;
 
     localparam BYTE_WIDTH = 8;
     localparam BYTE_PER_DATA = 4;
@@ -59,15 +59,20 @@ module ICache (
     localparam type plru_t = logic [ASSOCIATIVITY-2:0];
 
     localparam type state_t = enum logic[2:0] {
-        IDLE, FETCH_1, FETCH_2, STORE
+        IDLE, FETCH_1, FETCH_2, INVALID_ALL
     };
+
+    icache_inst_t inst_save;
+    logic inst_saved;
+
+    icache_inst_t valid_inst;
 
     addr_t ireq_1_addr, ireq_2_addr;
 
     index_t reset_counter;
 
-     //state
-    state_t state;
+    //state
+    (*mark_debug = "true"*)state_t state;
 
     //meta_ram
     typedef struct packed {
@@ -81,6 +86,8 @@ module ICache (
     meta_t meta_r_1, meta_r_2;
     meta_t meta_w;
     logic meta_en;
+
+    index_t meta_index;
 
     //计算hit
     logic hit_1, hit_2;
@@ -111,8 +118,6 @@ module ICache (
 
     logic data_ok_reg;
 
-    logic store_end;
-
     //for cache_inst invalid
     cache_oper_t cache_oper;
     associativity_t index_line;
@@ -134,12 +139,32 @@ module ICache (
         return word_t'(tag_lo[0]);
     endfunction
 
+    always_ff @(posedge clk) begin
+        if (resetn) begin
+            if (~en & ~inst_saved) begin
+                inst_save <= cache_inst;
+                inst_saved <= 1'b1;
+            end
+            else if (en) begin
+                inst_saved <= 1'b0;
+            end
+        end
+        else begin
+            inst_save <= I_UNKNOWN;
+            inst_saved <= '0;
+        end
+    end
 
-    assign cache_oper = ((cache_inst==I_INDEX_INVALID)|(cache_inst==I_HIT_INVALID&hit_1))?INVALID
-                        :(cache_inst==I_INDEX_STORE_TAG)?INDEX_STORE
-                        :(cache_inst==I_UNKNOWN)?REQ:NULL;
+    assign valid_inst = inst_saved ? inst_save : cache_inst;
+
+    //if ireq_1 is valid
+    assign en = ((valid_inst==I_UNKNOWN&ireq_hit)&state==IDLE)
+                | (state==INVALID_ALL&(&meta_index));
+
+    assign cache_oper = (valid_inst!=I_UNKNOWN & ireq_1.valid)?INVALID
+                        :(valid_inst==I_UNKNOWN & ireq_1.valid)?REQ:NULL;
     assign index_line = get_line(ireq_1_addr);
-    assign invalid_line = (cache_inst == I_INDEX_INVALID) ? index_line : hit_line_1;
+    assign invalid_line = (valid_inst == I_INDEX_INVALID) ? index_line : hit_line_1;
 
     assign ireq_1_addr = ireq_1.addr;
     assign ireq_2_addr = ireq_2.addr;
@@ -175,75 +200,64 @@ module ICache (
     
     assign ireq_hit = ireq_1.valid & hit_1 & hit_2;
 
-    assign en = ((cache_inst==I_UNKNOWN&ireq_hit)|cache_inst==I_HIT_INVALID|cache_inst==I_INDEX_INVALID|cache_inst==I_INDEX_STORE_TAG&(&miss_addr.offset))&state==IDLE;
-
     
     //meta_ram
     assign meta_addr_1 = resetn ? ((state==FETCH_2) ? ireq_2_addr.index
-                                                    : ireq_1_addr.index)
+                                : (state==INVALID_ALL) ? meta_index : ireq_1_addr.index)
                                 : reset_counter[INDEX_BITS-1:0];
 
     assign meta_addr_2 = ireq_2_addr.index;
     assign meta_en = ~resetn
                     |((state==FETCH_1|state==FETCH_2)&icresp.last)
-                    |((cache_oper==INVALID|cache_oper==INDEX_STORE)&state==IDLE);
+                    |(state==IDLE&cache_oper==INVALID)
+                    |(state==INVALID_ALL);
 
     always_comb begin
         meta_w = meta_r_1;
         if (resetn) begin
-            unique case(cache_oper)
-                INVALID: begin
+            unique case (state)
+                IDLE: begin
+                    if (cache_oper==INVALID) begin
+                        for (int i = 0; i < ASSOCIATIVITY; i++) begin
+                            if (invalid_line == associativity_t'(i)) begin
+                                meta_w[i].valid = 1'b0;
+                            end
+                            else begin
+                            end
+                        end
+                    end
+                end
+
+                FETCH_1: begin
                     for (int i = 0; i < ASSOCIATIVITY; i++) begin
-                        if (invalid_line == associativity_t'(i)) begin
-                            meta_w[i].valid = 1'b0;
+                        if (replace_line_1 == associativity_t'(i)) begin
+                            meta_w[i].tag = ireq_1_addr.tag;
+                            meta_w[i].valid = 1'b1;
+                        end
+                        else begin
+                        end
+                    end
+                    
+                end
+
+                FETCH_2: begin
+                    for (int i = 0; i < ASSOCIATIVITY; i++) begin
+                        if (replace_line_2 == associativity_t'(i)) begin
+                            meta_w[i].tag = ireq_2_addr.tag;
+                            meta_w[i].valid = 1'b1;
                         end
                         else begin
                         end
                     end
                 end
 
-                INDEX_STORE: begin
-                    for (int i = 0; i < ASSOCIATIVITY; i++) begin
-                        if (index_line == associativity_t'(i)) begin
-                            meta_w[i].tag = tag_lo_tag(tag_lo);
-                            meta_w[i].valid = tag_lo_valid(tag_lo);
-                        end
-                        else begin
-                        end
-                    end
+                INVALID_ALL: begin
+                    meta_w = '0;
                 end
 
-                REQ: begin
-                    unique case (state)
-                        FETCH_1: begin
-                            for (int i = 0; i < ASSOCIATIVITY; i++) begin
-                                if (replace_line_1 == associativity_t'(i)) begin
-                                    meta_w[i].tag = ireq_1_addr.tag;
-                                    meta_w[i].valid = 1'b1;
-                                end
-                                else begin
-                                end
-                            end
-                            
-                        end
-
-                        FETCH_2: begin
-                            for (int i = 0; i < ASSOCIATIVITY; i++) begin
-                                if (replace_line_2 == associativity_t'(i)) begin
-                                    meta_w[i].tag = ireq_2_addr.tag;
-                                    meta_w[i].valid = 1'b1;
-                                end
-                                else begin
-                                end
-                            end
-                        end
-                        default: begin   
-                        end
-                    endcase            
+                default: begin   
                 end
-                default: begin
-                end
-            endcase
+            endcase         
             
         end
         else begin
@@ -304,13 +318,12 @@ module ICache (
             unique case (state)
                 IDLE: begin
                     unique case(cache_oper)
-                        INDEX_STORE: begin
-                            if (~store_end) begin
-                                state <= STORE;
+                        INVALID: begin
+                            state <= INVALID_ALL;
 
-                                miss_addr <= {index_line, ireq_1_addr.index, offset_t'(1'b0)};
-                            end
+                            meta_index <= '0;
                         end
+
                         REQ: begin
                             if (ireq_1.valid & ~hit_1) begin
                                 state <= FETCH_1;
@@ -346,9 +359,9 @@ module ICache (
                     end
                 end
 
-                STORE: begin
-                    state <= (&miss_addr.offset) ? IDLE : STORE;
-                    miss_addr.offset <= miss_addr.offset + 1;
+                INVALID_ALL: begin
+                    state <= (&meta_index) ? IDLE : INVALID_ALL;
+                    meta_index <= meta_index + 1;
                 end
 
                 default: begin   
@@ -361,18 +374,7 @@ module ICache (
         end
     end
 
-    always_ff @(posedge clk) begin
-        if (resetn) begin
-            store_end <= state==IDLE ? 1'b0 
-                        : state==STORE ? 1'b1 : store_end;
-        end
-        else begin
-            store_end <= '0;
-        end
-    end
-
-
-
+    
     //data_ram
     assign port_1_en = 1'b1;       
     assign port_1_wen = '0;                    
@@ -380,10 +382,9 @@ module ICache (
     assign port_1_data_w = '0;
                                   
     assign port_2_en = 1'b1;
-    assign port_2_wen = (state==FETCH_1|state==FETCH_2|state==STORE) ? {BYTE_PER_DATA{1'b1}} : '0;
+    assign port_2_wen = (state==FETCH_1|state==FETCH_2) ? {BYTE_PER_DATA{1'b1}} : '0;
     assign port_2_addr = (state==IDLE) ? {hit_line_2, ireq_2_addr.index, ireq_2_addr.offset} : miss_addr;
-    assign port_2_data_w = (state==FETCH_1|state==FETCH_2) ? icresp.data 
-                            : state==STORE ? tag_lo_data(tag_lo) : '0;
+    assign port_2_data_w = (state==FETCH_1|state==FETCH_2) ? icresp.data : '0;
 
 
     RAM_TrueDualPort #(
