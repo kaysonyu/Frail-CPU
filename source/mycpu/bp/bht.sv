@@ -56,7 +56,6 @@ module bht#(
     endfunction
 
     function index_t get_index(addr_t addr);
-        return addr[2+INDEX_BITS-1+13:2+13];
         unique case (addr[16:10])
             7'b0101100: begin
                 if(addr[5]) return addr[2+INDEX_BITS-1+5:2+5];
