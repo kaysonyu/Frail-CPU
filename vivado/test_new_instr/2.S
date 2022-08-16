@@ -500,7 +500,7 @@ Disassembly of section .text:
 87900c6c:	00000000 	nop
 87900c70:	a0440000 	sb	a0,0(v0)
 87900c74:	03e00008 	jr	ra
-87900c78:	00000000 	nop
+87900c78:	00000000 	nopd
 87900c7c:	00000000 	nop
 
 87900c80 <tgt_testchar>:
