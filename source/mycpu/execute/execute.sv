@@ -80,8 +80,8 @@
     // assign dataE[1].cache_inst_i=dataI[1].ctl.cache_i;
     // assign dataE[0].cache_inst_i=dataI[0].ctl.cache_i;
 
-    assign dataE[1].cache_addr=  aluout;
-    assign dataE[0].cache_addr=  '0;
+    // assign dataE[1].cache_addr=  aluout;
+    // assign dataE[0].cache_addr=  '0;
     // assign cache_instE=dataI[1].ctl.cache||dataI[0].ctl.cache;
     // assign iaddrE= 1 ? aluout : aluout2;
 
@@ -202,7 +202,7 @@
 
     assign dataE[1].branch_taken=(dataI[1].ctl.jump&&~(dataI[1].pre_b&&dataI[1].pre_pc==target))
     ||(dataI[1].ctl.branch&&branch_condition&&~dataI[1].pre_b)
-    ||(dataI[1].ctl.branch&&~branch_condition&&dataI[1].pre_b);
+    ||(dataI[1].ctl.branch&&~branch_condition&&dataI[1].pre_b)||dataI[1].ctl.tlb||dataI[1].ctl.cache_d;
 
     for (genvar i=0; i<2; ++i) begin
         assign dataE[i].srcb=rd2[i];
@@ -213,8 +213,12 @@
         assign dataE[i].i_tlb_exc=dataI[i].i_tlb_exc;
     // assign dataE[i].ctl=dataI[i].ctl;
     end
-    assign dataE[1].valid=dataI[1].valid;
-    assign dataE[0].valid= exception_of[1]? '0 : dataI[0].valid;
+
+    
+    u1 [1:0] trap;
+    assign trap[1]=dataI[1].ctl.tne && (rd1[1]==rd2[1]);
+    assign trap[0]=dataI[0].ctl.tne && (rd1[0]==rd2[0]);
+
 
     assign dataE[0].is_slot=dataI[0].is_slot;
     assign dataE[1].is_slot='0;
@@ -234,16 +238,16 @@
     assign multib= rd2[valid_i];
     // assign diva=rd1[1];bypass_b_saved? bypass_save_b : 
     // assign divb=dataI[1].rd2;bypass_a_saved? bypass_save_a : 
-    assign nega=(dataI[valid_i].ctl.op==MULT||dataI[valid_i].ctl.op==DIV)&& multia[31];
-    assign negb=(dataI[valid_i].ctl.op==MULT||dataI[valid_i].ctl.op==DIV)&& multib[31];
+    assign nega=dataI[valid_i].ctl.signed_mul_div&& multia[31];
+    assign negb=dataI[valid_i].ctl.signed_mul_div&& multib[31];
     
     // always_comb begin
     //     {multia,multib,diva,divb}='0;
     //     if
     // end
     u1 mult_valid,div_valid;
-    assign mult_valid=dataI[1].ctl.op==MULT||dataI[1].ctl.op==MULTU||dataI[0].ctl.op==MULT||dataI[0].ctl.op==MULTU;
-    assign div_valid=dataI[1].ctl.op==DIV||dataI[1].ctl.op==DIVU||dataI[0].ctl.op==DIV||dataI[0].ctl.op==DIVU;
+    assign mult_valid=dataI[1].ctl.mul||dataI[0].ctl.mul;
+    assign div_valid=dataI[1].ctl.div||dataI[0].ctl.div;
 
     multi multiplier_multicycle_dsp(
         .clk,.resetn,
@@ -277,11 +281,12 @@
 
     always_comb begin
         valid_i='0;
-        if (dataI[1].ctl.op==MULT||dataI[1].ctl.op==MULTU||dataI[1].ctl.op==DIV||dataI[1].ctl.op==DIVU) begin
+        if (dataI[1].ctl.mul||dataI[1].ctl.div) begin
             valid_i='1;
-        end else if (dataI[0].ctl.op==MULT||dataI[0].ctl.op==MULTU||dataI[0].ctl.op==DIV||dataI[0].ctl.op==DIVU) begin
-            valid_i='0;
-        end
+        end 
+        // else if (dataI[0].ctl.op==MULT||dataI[0].ctl.op==MULTU||dataI[0].ctl.op==DIV||dataI[0].ctl.op==DIVU) begin
+        //     valid_i='0;
+        // end
     end
 
     always_comb begin
@@ -298,6 +303,7 @@
     end
 
     assign e_wait=((div_valid)&&~div_done)||((mult_valid)&&~mult_done);
+
 
 
     // always_ff @(posedge clk) begin
@@ -319,10 +325,10 @@
 
     u1 [1:0] load_misalign,store_misalign;
 
-    assign load_misalign[1]=dataI[1].ctl.memtoreg&&((dataI[1].ctl.msize==MSIZE2&&aluout[0]!=1'b0)||(dataI[1].ctl.msize==MSIZE4&&aluout[1:0]!=2'b00));
-    assign load_misalign[0]=dataI[0].ctl.memtoreg&&((dataI[0].ctl.msize==MSIZE2&&aluout2[0]!=1'b0)||(dataI[0].ctl.msize==MSIZE4&&aluout2[1:0]!=2'b00));
-    assign store_misalign[1]=dataI[1].ctl.memwrite&&((dataI[1].ctl.msize==MSIZE2&&aluout[0]!=1'b0)||(dataI[1].ctl.msize==MSIZE4&&aluout[1:0]!=2'b00));
-    assign store_misalign[0]=dataI[0].ctl.memwrite&&((dataI[0].ctl.msize==MSIZE2&&aluout2[0]!=1'b0)||(dataI[0].ctl.msize==MSIZE4&&aluout2[1:0]!=2'b00));
+    assign load_misalign[1]=~|dataI[1].ctl.memtype&& dataI[1].ctl.memtoreg&&((dataI[1].ctl.msize==MSIZE2&&aluout[0]!=1'b0)||(dataI[1].ctl.msize==MSIZE4&&aluout[1:0]!=2'b00));
+    assign load_misalign[0]=~|dataI[0].ctl.memtype&& dataI[0].ctl.memtoreg&&((dataI[0].ctl.msize==MSIZE2&&aluout2[0]!=1'b0)||(dataI[0].ctl.msize==MSIZE4&&aluout2[1:0]!=2'b00));
+    assign store_misalign[1]=~|dataI[1].ctl.memtype&& dataI[1].ctl.memwrite&&((dataI[1].ctl.msize==MSIZE2&&aluout[0]!=1'b0)||(dataI[1].ctl.msize==MSIZE4&&aluout[1:0]!=2'b00));
+    assign store_misalign[0]=~|dataI[0].ctl.memtype&& dataI[0].ctl.memwrite&&((dataI[0].ctl.msize==MSIZE2&&aluout2[0]!=1'b0)||(dataI[0].ctl.msize==MSIZE4&&aluout2[1:0]!=2'b00));
 
     always_comb begin
         dataE[1].ctl=dataI[1].ctl;
@@ -344,6 +350,10 @@
                 dataE[0].ctl.memwrite='0;
             end
 
+            if (dataI[1].cp0_ctl.ctype==EXCEPTION||exception_of[1]) begin
+                dataE[0].ctl.memwrite='0;
+            end
+
             
             if(dataI[1].ctl.op == MOVZ && (|rd2[1]))begin // rd2[1] != '0
                 dataE[1].ctl.regwrite='0;
@@ -360,6 +370,10 @@
 
     end
 
+        
+    assign dataE[1].valid=dataI[1].valid;
+    assign dataE[0].valid= exception_of[1]? '0 : dataI[0].valid;
+
     always_comb begin//都是双端口
         dataE[1].cp0_ctl=dataI[1].cp0_ctl;
         dataE[0].cp0_ctl=dataI[0].cp0_ctl;
@@ -375,25 +389,37 @@
         if (store_misalign[1]) begin
             dataE[1].cp0_ctl.ctype=EXCEPTION;
             dataE[1].cp0_ctl.etype.adesD= '1;
-            dataE[1].cp0_ctl.valid='1;
-            dataE[1].cp0_ctl.vaddr=aluout;
+            // dataE[1].cp0_ctl.valid='1;
+            // dataE[1].cp0_ctl.vaddr=aluout;
         end else if (store_misalign[0]) begin
             dataE[0].cp0_ctl.ctype=EXCEPTION;
-            dataE[0].cp0_ctl.valid='1;
+            // dataE[0].cp0_ctl.valid='1;
             dataE[0].cp0_ctl.etype.adesD='1;
-            dataE[0].cp0_ctl.vaddr=aluout2;
+            // dataE[0].cp0_ctl.vaddr=aluout2;
         end
         if ( load_misalign[1]) begin
             dataE[1].cp0_ctl.ctype=EXCEPTION;
-            dataE[1].cp0_ctl.valid='1;
+            // dataE[1].cp0_ctl.valid='1;
             dataE[1].cp0_ctl.etype.adelD= '1;
-            dataE[1].cp0_ctl.vaddr=aluout;
+            // dataE[1].cp0_ctl.vaddr=aluout;
         end else if ( load_misalign[0]) begin
             dataE[0].cp0_ctl.ctype=EXCEPTION;
-            dataE[0].cp0_ctl.valid='1;
+            // dataE[0].cp0_ctl.valid='1;
             dataE[0].cp0_ctl.etype.adelD='1;
-            dataE[0].cp0_ctl.vaddr=aluout2;
+            // dataE[0].cp0_ctl.vaddr=aluout2;
         end
+
+        priority case(1'b1)
+            trap[1]:begin
+                dataE[1].cp0_ctl.ctype=EXCEPTION;
+                dataE[1].cp0_ctl.etype.trap='1;
+            end
+            trap[0]:begin
+                dataE[0].cp0_ctl.ctype=EXCEPTION;
+                dataE[0].cp0_ctl.etype.trap='1;                
+            end
+            default:;
+        endcase
     end
 
 

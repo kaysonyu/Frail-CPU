@@ -43,14 +43,24 @@ module cp0
 	cp0_regs_t regs, regs_nxt;
 	assign regs_out=regs;
 	// word_t offset;
-	assign entrance=32'hbfc00380;
-	// assign offset= code==
+	// assign entrance=regs.ebase+offset;
+
+	word_t offset;
+	assign entrance=32'hbfc00200+offset;
+	always_comb begin
+		offset=32'h180;
+		if (is_int&&regs.cause.iv) begin
+			offset=32'h200;
+		end else if ((i_tlb_exc.refill||d_tlb_exc.refill)&&~regs.status.exl) begin
+			offset=32'h0;
+		end
+	end
 
 	// dataM2_save_t data_save[1:0];
 	// assign regs_out=regs_nxt;
 	// u1 trint,swint,exint;
 	//异常，排除中断
-	u1 interrupt,delayed_interupt;
+	u1 interrupt;
 	assign is_EXC= ctype==EXCEPTION;
 	word_t pc1_save,pc2_save;
 	
@@ -69,7 +79,7 @@ module cp0
 	} int_save_t;
 	int_save_t int_save;
 	u1 int_saved;
-	word_t soft_int_pc,soft_int_pc_nxt;
+	// word_t soft_int_pc,soft_int_pc_nxt;
 
 	// write
 	always_ff @(posedge clk) begin
@@ -88,17 +98,17 @@ module cp0
 	always_ff @(posedge clk) begin
 		if (reset) begin
 			regs <= '0;
-			regs.config0<=32'h80000480;
-			regs.config1<=32'h1e693480;
+			regs.config0<=32'h80000483;
+			regs.config1<=32'h20291480;
 			regs.prid<=32'h00004220;
 			regs.ebase.one<='1;
-			soft_int_pc<='0;
+			// soft_int_pc<='0;
 			// regs.mcause[1] <= 1'b1;
 			// regs.epc[31] <= 1'b1;
 		end else begin
 			regs <= regs_nxt;
 			double <= 1'b1-double;
-			soft_int_pc<=soft_int_pc_nxt;
+			// soft_int_pc<=soft_int_pc_nxt;
 
 		end
 	end
@@ -130,7 +140,7 @@ module cp0
 		end else if (ra[2:0]==3'b001) begin
 			unique case(ra[7:3])
 			5'd15: rd=  {2'b10,regs.ebase.ebase,12'b0};
-			5'd16: rd = 32'h1e693480;
+			5'd16: rd = 32'h20291480;
 			default:;
 
 			endcase
@@ -164,7 +174,7 @@ module cp0
 		end else if (raM[2:0]==3'b001) begin
 			unique case(raM[7:3])
 			5'd15: rdM=  {2'b10,regs.ebase.ebase,12'b0};
-			5'd16: rdM = 32'h1e693480;
+			5'd16: rdM = 32'h20291480;
 			default:;
 
 			endcase
@@ -185,7 +195,7 @@ module cp0
 			code=EXCCODE_TLBL;
 		end else if (etype.overflow) begin
 			code=EXCCODE_OV;
-		end else if (etype.trap) begin
+		end else if (etype.bp) begin
 			code=EXCCODE_BP;
 		end else if (etype.syscall) begin
 			code=EXCCODE_SYS;
@@ -195,6 +205,10 @@ module cp0
 			code=EXCCODE_ADEL;
 		end else if (etype.adesD) begin
 			code=EXCCODE_ADES;
+		end else if (etype.cpU) begin
+			code=EXCCODE_CPU;
+		end else if (etype.trap) begin
+			code=EXCCODE_TR;
 		end
 	end
 	u1 soft_int;
@@ -207,8 +221,7 @@ module cp0
 	always_comb begin
 		regs_nxt.cause.ti= regs.count==regs.compare;
 		regs_nxt = regs;
-		soft_int_pc_nxt=soft_int_pc;
-		delayed_interupt='0;
+		// soft_int_pc_nxt=soft_int_pc;
 		if (double&&wa[7:3]!=5'd9) begin
 			regs_nxt.count = regs.count + 1;
 		end
@@ -232,6 +245,7 @@ module cp0
 			end else if ((code==EXCCODE_ADEL&&etype.adelD)||code==EXCCODE_ADES||code==EXCCODE_TLBS||(code==EXCCODE_TLBL&&|d_tlb_exc)) begin
 				regs_nxt.bad_vaddr=vaddr;
 			end
+
 
 			if (i_tlb_exc.refill||i_tlb_exc.invalid) begin
 				regs_nxt.entry_hi.vpn2=pc[31:13];
@@ -277,7 +291,7 @@ module cp0
 					5'd13: begin
 						regs_nxt.cause.iv = wd[23];
 						regs_nxt.cause.ip[1:0] = wd[9:8];
-						soft_int_pc_nxt=pc;
+						// soft_int_pc_nxt=pc;
 					end
 					5'd14: regs_nxt.epc = wd;
 					// 5'd15: regs_nxt.prid=wd;

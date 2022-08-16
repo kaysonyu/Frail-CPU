@@ -2,13 +2,14 @@
 `define __JHT_SV
 
 `include "common.svh"
+`include "test.svh"
 `ifdef VERILATOR
 `include "../plru.sv"
 `endif 
 
 module jht#(
     parameter int ASSOCIATIVITY = 2,
-    parameter int SET_NUM = 4,
+    parameter int SET_NUM = 8,
 
     localparam INDEX_BITS = $clog2(SET_NUM),
     localparam ASSOCIATIVITY_BITS = $clog2(ASSOCIATIVITY),
@@ -42,8 +43,28 @@ module jht#(
         return addr[2+TAG_BITS-1:2];
     endfunction
 
-    function index_t get_index(addr_t addr);
-        return addr[2+INDEX_BITS-1+2:2+2];
+     function index_t get_index(addr_t addr);
+        unique case (addr[16:10])
+            7'b0000110: begin
+                if(addr[4]) return addr[2+INDEX_BITS-1+4:2+4];
+                else return addr[2+INDEX_BITS-1+5:2+5];
+            end 
+            7'b0000111, 7'b0001000, 7'b0001001, 7'b0001010, 7'b0001011, 7'b0001100, 7'b0001101, 7'b0001110, 7'b0001111, 7'b0010000, 7'b0010001, 7'b0010010, 7'b0010011, 7'b0010100, 7'b0010101, 7'b0010110, 7'b0010111, 7'b0011000, 7'b0011001, 7'b0011010, 7'b0011011, 7'b0011100, 7'b0011101, 7'b0011110, 7'b0011111, 7'b0100000, 7'b0100001, 7'b0100010, 7'b0100011, 7'b0100100, 7'b0100101, 7'b0100110, 7'b0100111, 7'b0101000, 7'b0101001, 7'b0101010, 7'b0101011: begin
+                return addr[2+INDEX_BITS-1+4:2+4];
+            end
+            7'b0101100: begin
+                if(addr[5]) return addr[2+INDEX_BITS-1+5:2+5];
+                else return addr[2+INDEX_BITS-1+4:2+4];
+            end 
+            7'b1000111: begin
+                if(addr[5]) return addr[2+INDEX_BITS-1+4:2+4];
+                else return addr[2+INDEX_BITS-1+5:2+5];
+            end
+            7'b1001000, 7'b1001001 : begin
+                return addr[2+INDEX_BITS-1+4:2+4];
+            end
+            default: return addr[2+INDEX_BITS-1+5:2+5];
+        endcase
     endfunction
 
     meta_t [ASSOCIATIVITY-1:0] r_meta_hit;
@@ -87,10 +108,7 @@ module jht#(
         else if(pcp4_hit) hit_line = pcp4_hit_line;
     end
 
-    always_comb begin : predict_addr_index_b
-        predict_addr.index = '0;
-        if(pc_hit) predict_addr.index = get_index(j_pc);
-    end
+    assign predict_addr.index = get_index(j_pc);
     assign predict_addr.line = hit_line;
 
     assign predict_pc = hit ? r_pc_predict : '0;

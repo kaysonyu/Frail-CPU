@@ -36,15 +36,7 @@ module decoder (
         {srcrega,srcregb,destreg}='0;
         if (valid) begin
             case (op_)
-            `OP_MUL: begin
-                ctl.op = MULT;
-                ctl.regwrite = 1'b1;
-                ctl.alusrc = REGB;
-                ctl.mul_div_r = 1'b1;
-                srcrega = rs;
-                srcregb = rt;
-                destreg = rd;
-            end
+
             `OP_ADDI: begin
                 ctl.op = ADD;
                 ctl.alufunc = ALU_ADD;
@@ -121,7 +113,7 @@ module decoder (
                 srcregb = '0;
                 destreg = rt;
             end  
-            `OP_BEQ: begin
+            `OP_BEQ,`OP_BEQL: begin
                 ctl.op = BEQ;
                 ctl.branch = 1'b1;
                 // //jump='1;
@@ -129,7 +121,7 @@ module decoder (
                 srcrega = rs;
                 srcregb = rt;
                 destreg = '0;
-            end   
+            end
             `OP_BNE: begin
                 ctl.op = BNE;
                 // //jump='1;
@@ -212,14 +204,12 @@ module decoder (
             `OP_J: begin
                 ctl.op = J;
                 ctl.jump = 1'b1;
-                //jump='1;
                 srcrega = '0;
                 srcregb = '0;
                 destreg = '0;
             end     
             `OP_JAL: begin
                 ctl.op = JAL;
-                //jump='1;
                 ctl.jump = 1'b1;
                 ctl.regwrite = 1'b1;
                 ctl.is_link = 'b1;
@@ -297,9 +287,8 @@ module decoder (
                 srcregb = rt;
                 destreg = '0;
                 ctl.msize=MSIZE2;
-
             end    
-            `OP_SW,`OP_SC: begin
+            `OP_SW: begin
                 ctl.op = SW;
                 ctl.memwrite = 1'b1;
                 ctl.alusrc = IMM;
@@ -307,52 +296,107 @@ module decoder (
                 srcregb = rt;
                 destreg = '0;
                 ctl.msize=MSIZE4;
-
+                ctl.sc='1;
+            end
+            `OP_SC:begin
+                ctl.op = SW;
+                ctl.memwrite = 1'b1;
+                ctl.alusrc = IMM;
+                srcrega = rs;
+                srcregb = rt;
+                destreg = rt;
+                ctl.regwrite='1;
+                
+                ctl.msize=MSIZE4;
+            end
+            `OP_LWL:begin
+                ctl.op = LW;
+                ctl.regwrite = 1'b1;
+                ctl.memtoreg = 1'b1;
+                ctl.alusrc = IMM;
+                srcrega = rs;
+                srcregb = rt;
+                destreg = rt;
+                ctl.msize=MSIZE4;
+                ctl.memtype=MEML;
+            end
+            `OP_LWR: begin
+                ctl.op = LW;
+                ctl.regwrite = 1'b1;
+                ctl.memtoreg = 1'b1;
+                ctl.alusrc = IMM;
+                srcrega = rs;
+                srcregb = rt;
+                destreg = rt;
+                ctl.msize=MSIZE4;
+                ctl.memtype=MEMR;
+            end
+            `OP_SWL:begin
+                ctl.op = SW;
+                ctl.memwrite = 1'b1;
+                ctl.alusrc = IMM;
+                srcrega = rs;
+                srcregb = rt;
+                destreg = '0;
+                ctl.msize=MSIZE4;
+                ctl.memtype=MEML;
+            end
+            `OP_SWR:begin
+                ctl.op = SW;
+                ctl.memwrite = 1'b1;
+                ctl.alusrc = IMM;
+                srcrega = rs;
+                srcregb = rt;
+                destreg = '0;
+                ctl.msize=MSIZE4;
+                ctl.memtype=MEMR;
             end
             `OP_CACHE: begin
-                // ctl.alusrc=IMM;
-                // ctl.alufunc=ALU_ADDU;
-                // srcrega=rs;
-                // ctl.cache='1;
-				// case(instr[20:16])
-                //     `I_INDEX_INVALID:begin
-                //         cache_ctl.icache_inst=I_INDEX_INVALID;
-                //         ctl.cache_i='1;
-                //     end
-                //     `I_INDEX_STORE_TAG:begin
-                //         cache_ctl.icache_inst=I_INDEX_STORE_TAG;
-                //         ctl.cache_i='1;
-                //         cp0ra={5'd28,3'b000};
-
-                //     end
-                //     `I_HIT_INVALID:begin
-                //         cache_ctl.icache_inst=I_HIT_INVALID;
-                //         ctl.cache_i='1;
-
-                //     end
-                //     `D_INDEX_WRITEBACK_INVALID:begin
-                //         cache_ctl.dcache_inst=D_INDEX_WRITEBACK_INVALID;
-                //         ctl.cache_d='1;
-                //     end
-                //     `D_INDEX_STORE_TAG:begin
-                //         cache_ctl.dcache_inst=D_INDEX_STORE_TAG;
-                //         ctl.cache_d='1;
-                //         cp0ra={5'd28,3'b000};
-                //     end
-                //     `D_HIT_INVALID:begin
-                //         cache_ctl.dcache_inst=D_HIT_INVALID;
-                //         ctl.cache_d='1;
-
-                //     end
-                //     `D_HIT_WRITEBACK_INVALID:begin
-                //         cache_ctl.dcache_inst=D_HIT_WRITEBACK_INVALID;
-                //         ctl.cache_d='1;
-
-                //     end
-                //     default: ;
-                // endcase
+                ctl.alusrc=IMM;
+                ctl.alufunc=ALU_ADDU;
+                srcrega=rs;
+                ctl.cache='1;
+                ctl.single_issue='1;
+                
+				case(instr[20:16])
+                    `I_INDEX_INVALID:begin
+                        cache_ctl.icache_inst=I_INDEX_INVALID;
+                        ctl.cache_i='1;
+                    end
+                    `I_INDEX_STORE_TAG:begin
+                        cache_ctl.icache_inst=I_INDEX_STORE_TAG;
+                        ctl.cache_i='1;
+                        cp0ra={5'd28,3'b000};
+                    end
+                    `I_HIT_INVALID:begin
+                        cache_ctl.icache_inst=I_HIT_INVALID;
+                        ctl.cache_i='1;
+                    end
+                    `D_INDEX_WRITEBACK_INVALID:begin
+                        cache_ctl.dcache_inst=D_INDEX_WRITEBACK_INVALID;
+                        ctl.cache_d='1;
+                        ctl.memwrite='1;
+                    end
+                    `D_INDEX_STORE_TAG:begin
+                        cache_ctl.dcache_inst=D_INDEX_STORE_TAG;
+                        ctl.cache_d='1;
+                        cp0ra={5'd28,3'b000};
+                        ctl.memwrite='1;
+                    end
+                    `D_HIT_INVALID:begin
+                        cache_ctl.dcache_inst=D_HIT_INVALID;
+                        ctl.cache_d='1;
+                        ctl.memwrite='1;
+                    end
+                    `D_HIT_WRITEBACK_INVALID:begin
+                        cache_ctl.dcache_inst=D_HIT_WRITEBACK_INVALID;
+                        ctl.cache_d='1;
+                        ctl.memwrite='1;
+                    end
+                    default: ;
+                endcase
 			end    
-            `OP_ERET: begin
+            `OP_COP0: begin
                 case (instr[25:21])
                     `C_ERET:begin
                         case(instr[5:0])
@@ -364,25 +408,35 @@ module decoder (
                                 destreg = '0;
                             end
                             `CP_TLBP:begin
-                                // ctl.tlb='1;
-                                // ctl.tlb_type=TLBP;
+                                ctl.tlb='1;
+                                ctl.single_issue='1;
+                                ctl.tlb_type=TLBP;
                             end
                             `CP_TLBR:begin
-                                // ctl.tlb='1;
-                                // ctl.tlb_type=TLBR;
+                                ctl.tlb='1;
+                                ctl.single_issue='1;
+                                ctl.tlb_type=TLBR;
                             end
                             `CP_TLBWI:begin
-                                // ctl.tlb='1;
-                                // ctl.tlb_type=TLBWI;
+                                ctl.tlb='1;
+                                ctl.single_issue='1;
+                                ctl.tlb_type=TLBWI;
                             end
                             `CP_TLBWR:begin
-                                // ctl.tlb='1;
-                                // ctl.tlb_type=TLBWR;
+                                ctl.tlb='1;
+                                ctl.single_issue='1;
+                                ctl.tlb_type=TLBWR;
+                            end
+                            `CP_WAIT:begin
+                                ctl.wait_signal='1;
+                                ctl.single_issue='1;
+                                ctl.alufunc=ALU_PASSA;
                             end
                             default:begin
                                 exception_ri = 1'b1;
                                 ctl.op = RESERVED;
                                 cp0_ctl.ctype=EXCEPTION;
+                                ctl.alufunc=ALU_PASSA;
                             end
                         endcase
                     end 
@@ -400,7 +454,7 @@ module decoder (
                     `C_MTC0:begin
                         ctl.op = MTC0;
                         cp0_ctl.ctype=INSTR;
-                        cp0_ctl.valid='1;
+                        // cp0_ctl.valid='1;
                         ctl.cp0write = 1'b1;
                         ctl.alufunc = ALU_PASSB;
                         srcrega = '0;
@@ -414,7 +468,7 @@ module decoder (
                     end
                 endcase
             end
-            `OP_RT: begin
+            `OP_SPECIAL: begin
                 case (func)
                     `F_ADD: begin
                         ctl.op = ADD;
@@ -472,12 +526,14 @@ module decoder (
                     end   
                     `F_DIV: begin
                         ctl.op = DIV;
+                        ctl.signed_mul_div='1;
                         ctl.hiwrite = 1'b1;
                         ctl.lowrite = 1'b1;
                         ctl.alusrc = REGB;
                         srcrega = rs;
                         srcregb = rt;
                         destreg = '0;
+                        ctl.div='1;
                     end    
                     `F_DIVU: begin
                         ctl.op = DIVU;
@@ -487,15 +543,18 @@ module decoder (
                         srcrega = rs;
                         srcregb = rt;
                         destreg = '0;
+                        ctl.div='1;
                     end   
                     `F_MULT: begin
                         ctl.op = MULT;
+                        ctl.signed_mul_div='1;
                         ctl.hiwrite = 1'b1;
                         ctl.lowrite = 1'b1;
                         ctl.alusrc = REGB;
                         srcrega = rs;
                         srcregb = rt;
                         destreg = '0;
+                        ctl.mul='1;
                     end   
 					`F_MULTU:begin
                         ctl.op = MULTU;
@@ -505,6 +564,7 @@ module decoder (
                         srcrega = rs;
                         srcregb = rt;
                         destreg = '0;
+                        ctl.mul='1;
                     end	
 					`F_AND:begin
                         ctl.op = AND;
@@ -560,6 +620,9 @@ module decoder (
                         srcrega = '0;
                         srcregb = rt;
                         destreg = rd;
+                        if (instr[25:0]==26'b1000000) begin
+                            ctl.single_issue='1;
+                        end
                     end		
 					`F_SRAV:begin
                         ctl.op = SRAV;
@@ -603,7 +666,6 @@ module decoder (
                     end		
 					`F_JR:begin
                         ctl.op = JR;
-                        //jump='1;
                         ctl.jump = 1'b1;
                         ctl.jr = 1'b1;
                         srcrega = rs;
@@ -612,7 +674,6 @@ module decoder (
                     end		
 					`F_JALR:begin
                         ctl.op = JALR;
-                        //jump='1;
                         ctl.jump = 1'b1;
                         ctl.jr = 1'b1;
                         ctl.regwrite = 1'b1;
@@ -659,23 +720,15 @@ module decoder (
                         ctl.op = BREAK;
                         ctl.alufunc = ALU_PASSA;
                         cp0_ctl.ctype=EXCEPTION;
-                        cp0_ctl.valid='1;
-                        cp0_ctl.etype.trap='1;
-                        ctl.is_bp = 1'b1;
-                        srcrega = 'b0;
-                        srcregb = 'b0;
-                        destreg = 'b0;
+                        cp0_ctl.etype.bp='1;
+                        // ctl.is_bp = 1'b1;
                     end	
 					`F_SYSCALL:begin
                         ctl.op = SYSCALL;
                         cp0_ctl.ctype=EXCEPTION;
-                        cp0_ctl.valid='1;
                         cp0_ctl.etype.syscall='1;
                         ctl.alufunc = ALU_PASSA;
-                        ctl.is_sys = 1'b1;
-                        srcrega = 'b0;
-                        srcregb = 'b0;
-                        destreg = 'b0;
+                        // ctl.is_sys = 1'b1;
                     end	
                     `F_MOVZ:begin
                         ctl.op = MOVZ;
@@ -698,6 +751,12 @@ module decoder (
                     `F_SYNC:begin
                         
                     end
+                    `F_TNE:begin
+                        ctl.tne='1;
+                        srcrega = rs;
+                        srcregb = rt;
+                        ctl.alufunc = ALU_PASSA;
+                    end
                     default: begin
                         exception_ri = 1'b1;
                         ctl.op = RESERVED;
@@ -705,17 +764,98 @@ module decoder (
                         srcrega = 'b0;
                         srcregb = 'b0;
                         destreg = 'b0;
-                cp0_ctl.ctype=EXCEPTION;
+                        cp0_ctl.ctype=EXCEPTION;
                     end
                 endcase
+            end
+            `OP_COP1:begin
+                unique case(instr[25:21])
+                `CP1_CF,`CP1_CT,`CP1_MT:begin
+                    cp0_ctl.ctype=EXCEPTION;
+                    cp0_ctl.etype.cpU='1;
+                end
+                // `CP1_CT:begin
+                //     cp0_ctl.ctype=EXCEPTION;
+                //     cp0_ctl.etype.cpU='1;
+                // end
+                // `CP1_MT:begin
+                //     cp0_ctl.ctype=EXCEPTION;
+                //     cp0_ctl.etype.cpU='1;
+                // end
+                default:begin
+                exception_ri = 1'b1;
+                ctl.op = RESERVED;
+                ctl.alufunc = ALU_PASSA;
+                cp0_ctl.ctype=EXCEPTION;
+                end
+                endcase
+            end
+            `OP_LDC1:begin
+                cp0_ctl.ctype=EXCEPTION;
+                cp0_ctl.etype.cpU='1;
+                ctl.alufunc = ALU_PASSA;
+            end
+            `OP_SDC1:begin
+                cp0_ctl.ctype=EXCEPTION;
+                cp0_ctl.etype.cpU='1;
+                ctl.alufunc = ALU_PASSA;
+            end
+            `OP_SPECIAL2: begin
+                unique case(instr[5:0])
+                    `SP_MADD:begin
+                        ctl.hilo_op=HILO_ADD;
+                        // ctl.op = MADD;
+                        ctl.hiwrite = 1'b1;
+                        ctl.lowrite = 1'b1;
+                        ctl.alusrc = REGB;
+                        srcrega = rs;
+                        srcregb = rt;
+                        ctl.signed_mul_div='1;
+                        destreg = '0;
+                        ctl.mul='1;
+                    end
+                    `SP_MADDU:begin
+                        ctl.hilo_op=HILO_ADD;
+                        // ctl.op = MADD;
+                        ctl.hiwrite = 1'b1;
+                        ctl.lowrite = 1'b1;
+                        ctl.alusrc = REGB;
+                        srcrega = rs;
+                        srcregb = rt;
+                        destreg = '0;
+                    end
+                    `SP_MSUB:begin
+                        ctl.hilo_op=HILO_SUB;
+                        ctl.op = MSUB;
+                        ctl.hiwrite = 1'b1;
+                        ctl.lowrite = 1'b1;
+                        ctl.alusrc = REGB;
+                        srcrega = rs;
+                        srcregb = rt;
+                        ctl.signed_mul_div='1;
+                        destreg = '0;
+                        ctl.mul='1;
+                    end
+                    `SP_MUL:begin
+                        ctl.op = MULT;
+                        ctl.regwrite = 1'b1;
+                        ctl.alusrc = REGB;
+                        srcrega = rs;
+                        srcregb = rt;
+                        destreg = rd;
+                        ctl.signed_mul_div='1;
+                        ctl.mul='1;
+                    end
+                    default:;
+                endcase
+            end
+            `OP_PREF:begin
+                
             end
             default: begin
                 exception_ri = 1'b1;
                 ctl.op = RESERVED;
                 ctl.alufunc = ALU_PASSA;
-                srcrega = 'b0;
-                srcregb = 'b0;
-                destreg = 'b0;
                 cp0_ctl.ctype=EXCEPTION;
             end
         endcase

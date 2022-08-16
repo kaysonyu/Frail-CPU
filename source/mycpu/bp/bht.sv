@@ -2,6 +2,7 @@
 `define __BHT_SV
 
 `include "common.svh"
+`include "test.svh"
 `ifdef VERILATOR
 `include "../plru.sv"
 `endif 
@@ -9,11 +10,12 @@
 module bht#(
     parameter int ASSOCIATIVITY = 2,
     parameter int SET_NUM = 8,
-    parameter int BH_BITS = 2,
+    parameter int BH_BITS = 1,
     parameter int COUNTER_BITS = 2,
 
     localparam INDEX_BITS = $clog2(SET_NUM),
     localparam ASSOCIATIVITY_BITS = $clog2(ASSOCIATIVITY),
+    localparam COUNTER_NUM = 2 ** BH_BITS,
     localparam TAG_BITS = 18,
     localparam type tag_t = logic [TAG_BITS-1:0],
     localparam type index_t = logic [INDEX_BITS-1:0],
@@ -31,7 +33,8 @@ module bht#(
     },
     localparam type bh_data_t = struct packed {
         addr_t pc;
-        counter_t counter;
+        bhr_t bhr;
+        counter_t [COUNTER_NUM-1:0] counter;
     }
 ) (
     input logic clk, resetn,
@@ -53,7 +56,59 @@ module bht#(
     endfunction
 
     function index_t get_index(addr_t addr);
-        return addr[2+INDEX_BITS-1+2:2+2];
+        return addr[2+INDEX_BITS-1+13:2+13];
+        unique case (addr[16:10])
+            7'b0101100: begin
+                if(addr[5]) return addr[2+INDEX_BITS-1+5:2+5];
+                else return addr[2+INDEX_BITS-1+13:2+13];
+            end 
+            7'b0101101: begin
+                return addr[2+INDEX_BITS-1+5:2+5];
+            end
+            7'b0101110: begin
+                if(addr[4]) return addr[2+INDEX_BITS-1+3:2+3];
+                else return addr[2+INDEX_BITS-1+5:2+5];
+            end
+            7'b0101111, 7'b0110000, 7'b0110001, 7'b0110010 : begin
+                return addr[2+INDEX_BITS-1+3:2+3];
+            end
+            7'b0110011: begin
+                if(addr[5]) return addr[2+INDEX_BITS-1+13:2+13];
+                else return addr[2+INDEX_BITS-1+3:2+3];
+            end
+            7'b0110100, 7'b0110101, 7'b0110110, 7'b0110111, 7'b0111000, 7'b0111001 : begin
+                return addr[2+INDEX_BITS-1+13:2+13];
+            end
+            7'b0111010: begin
+                if(addr[4]) return addr[2+INDEX_BITS-1+1:2+1];
+                else return addr[2+INDEX_BITS-1+13:2+13];
+            end
+            7'b0111011, 7'b0111100 : begin
+                return addr[2+INDEX_BITS-1+1:2+1];
+            end
+            7'b0111101: begin
+                if(addr[5]) return addr[2+INDEX_BITS-1+5:2+5];
+                else return addr[2+INDEX_BITS-1+1:2+1];
+            end
+            7'b0111110, 7'b0111111, 7'b1000000, 7'b1000001, 7'b1000010, 7'b1000011, 7'b1000100 : begin
+                return addr[2+INDEX_BITS-1+5:2+5];
+            end
+            7'b1000101: begin
+                if(addr[6]) return addr[2+INDEX_BITS-1+4:2+4];
+                else return addr[2+INDEX_BITS-1+5:2+5];
+            end
+            7'b1000110 : begin
+                return addr[2+INDEX_BITS-1+4:2+4];
+            end
+            7'b1000111: begin
+                if(addr[5]) return addr[2+INDEX_BITS-1+7:2+7];
+                else return addr[2+INDEX_BITS-1+4:2+4];
+            end
+            7'b1001000, 7'b1001001 : begin
+                return addr[2+INDEX_BITS-1+7:2+7];
+            end
+            default: return addr[2+INDEX_BITS-1+13:2+13];
+        endcase
     endfunction
 
     meta_t [ASSOCIATIVITY-1:0] r_meta_hit;
@@ -102,14 +157,11 @@ module bht#(
     //     if(pc_hit) is_jump_out = is_pc_jump;
     // end
 
-    always_comb begin : predict_addr_index_b
-        predict_addr.index = '0;
-        if(pc_hit) predict_addr.index = get_index(branch_pc);
-    end
+    assign predict_addr.index = get_index(branch_pc);
     assign predict_addr.line = hit_line;
 
     assign predict_pc = hit ? r_pc_predict.pc : '0;
-    assign dpre = r_pc_predict.counter[COUNTER_BITS-1];
+    assign dpre = r_pc_predict.counter[r_pc_predict.bhr][COUNTER_BITS-1];
 
 
     // for repalce
@@ -164,7 +216,7 @@ module bht#(
     counter_t w_counter;
 
     always_comb begin : gen_w_counter 
-            unique case (r_pc_replace.counter)
+            unique case (r_pc_replace.counter[is_taken])
                 2'b00: begin
                     if (is_taken) w_counter = 2'b01;
                     else w_counter = 2'b00;
@@ -190,7 +242,16 @@ module bht#(
             endcase
     end
 
-    assign w_pc_replace.counter = in_bht ? w_counter : '1;
+
+    always_comb begin
+        w_pc_replace.counter = r_pc_replace.counter;
+        if (is_taken) begin
+            w_pc_replace.counter[1] = in_bht ? w_counter : '1;
+        end else begin
+            w_pc_replace.counter[0] = in_bht ? w_counter : '1;
+        end
+    end
+    assign w_pc_replace.bhr = in_bht ? is_taken : '1;
 
     // always_comb begin : w_counter_set_replace_b 
     //     w_counter_set_replace = '0;

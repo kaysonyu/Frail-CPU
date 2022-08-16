@@ -17,13 +17,13 @@ module issue(
     input bypass_output_t [1:0] bypass_inra2,
     input u1 flush_que,
     input u1 stallI,stallI_de,
-    output u1 overflow,
-    output decode_data_t candidate1,
-    output u1 issue_en_1,
-    output u1 candidate2_invalid,
-    input u1 pred_flush_que,
-    input u1 jr_predicted,
-    input word_t jr_predicted_pc
+    output u1 overflow
+    // output decode_data_t candidate1,
+    // output u1 issue_en_1,
+    // output u1 candidate2_invalid,
+    // input u1 pred_flush_que,
+    // input u1 jr_predicted,
+    // input word_t jr_predicted_pc
 );
 localparam ISSUE_QUEUE_SIZE = 16;
 localparam ISSUE_QUEUE_WIDTH = $clog2(ISSUE_QUEUE_SIZE);
@@ -40,7 +40,7 @@ decode_data_t rdata_even,rdata_odd,wdata_even,wdata_odd;
 u1 even_en,odd_en;
 
 u1 issue_en1,issue_en2;
-decode_data_t candidate2;
+decode_data_t candidate1,candidate2;
 
 RAM_SimpleDualPort  #(
     .ADDR_WIDTH(ISSUE_QUEUE_WIDTH),
@@ -67,16 +67,16 @@ RAM_SimpleDualPort #(
     .rdata(rdata_odd),
     .strobe('1)
 );
-assign candidate2_invalid=~candidate2.valid;
-assign issue_en_1=issue_en1;
+// assign candidate2_invalid=~candidate2.valid;
+// assign issue_en_1=issue_en1;
 function index_t push(index_t tail_in);
-    return tail_in==0? 4'd15:tail_in-1;
+    return ~(|tail_in)? 4'd15:tail_in-1;
 endfunction
 function index_t pop(index_t head_in);
-    return head_in==0? 4'd15:head_in-1;
+    return ~(|head_in)? 4'd15:head_in-1;
 endfunction
-function u1 multi_op(decoded_op_t op);
-    return op==DIV||op==DIVU||op==MULT||op==MULTU;
+function u1 multi_op(control_t ctl);
+    return ctl.div||ctl.mul;
 endfunction
 function u1 odd_larger(index_t odd,index_t even);
     return odd==even;
@@ -107,15 +107,15 @@ assign have_slot= (candidate1.ctl.branch||candidate1.ctl.jump);
 
 assign issue_en2=candidate2.valid&& bypass_inra1[0].valid && bypass_inra2[0].valid 
 && ~((candidate1.ctl.regwrite&&(candidate1.rdst==candidate2.ra1||candidate1.rdst==candidate2.ra2)&&~have_slot)
-        ||(multi_op(candidate1.ctl.op)&&multi_op(candidate2.ctl.op))
-        ||candidate1.ctl.cp0write||~issue_en1||candidate2.ctl.branch||candidate2.ctl.jump
+        ||(multi_op(candidate1.ctl)&&multi_op(candidate2.ctl))
+        ||candidate1.ctl.cp0write
+        ||candidate2.ctl.cp0write
+        ||~issue_en1||candidate2.ctl.branch||candidate2.ctl.jump
         ||(candidate1.ctl.lowrite&&candidate2.ctl.lotoreg)||(candidate1.ctl.hiwrite&&candidate2.ctl.hitoreg)
         ||(candidate1.ctl.cp0toreg&&candidate2.ctl.cp0toreg)
         ||(candidate1.cp0_ctl.ctype==EXCEPTION||candidate1.cp0_ctl.ctype==ERET)
-        ||candidate1.ctl.cache
-        ||candidate2.ctl.cache
-        ||candidate2.ctl.tlb
-        ||candidate1.ctl.tlb);
+        ||candidate1.ctl.single_issue
+        ||candidate2.ctl.single_issue);
 
 assign overflow= push(tail_odd)==head_odd || push(tail_even)==head_even;
 
@@ -143,9 +143,6 @@ end
 always_ff @(posedge clk) begin
     if (reset||flush_que) begin
         {tail_even,tail_odd}<='0;
-    end else if (pred_flush_que) begin
-        tail_even<=pop(head_even);
-        tail_odd<=pop(head_odd);
     end else if (~stallI)begin
         if (odd_larger(tail_odd,tail_even)&&dataD[1].valid) begin
             // issue_queue_odd[tail_odd]<=dataD[1];
@@ -202,8 +199,8 @@ end
                 dataI[1].i_tlb_exc=candidate1.i_tlb_exc;
                 dataI[1].cache_ctl=candidate1.cache_ctl;
                 dataI[1].cp0_ctl=candidate1.cp0_ctl;
-                dataI[1].pre_b=candidate1.pre_b||jr_predicted;
-                dataI[1].pre_pc= jr_predicted? jr_predicted_pc:candidate1.pre_pc;
+                dataI[1].pre_b=candidate1.pre_b;
+                dataI[1].pre_pc= candidate1.pre_pc;
             end
             if (issue_en2) begin
                     dataI[0].ctl=candidate2.ctl;
