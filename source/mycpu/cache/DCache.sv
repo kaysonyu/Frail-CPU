@@ -199,7 +199,8 @@ module DCache (
     logic port_2_en;
     strobe_t port_2_wen;
     data_addr_t port_2_addr;
-    word_t port_2_data_w, port_2_data_r;
+    word_t port_2_data_w;
+    word_t port_2_data_r;
 
     //FETCH结束,下一周期addr_ok
     state_t finish_state;
@@ -833,6 +834,11 @@ module DCache (
                 cbus_addr = process_dreq_2_addr;
             end
 
+            WRITEBACK: begin
+                cbus_addr.tag = cache_handle.meta_r_1[cache_handle.inst_oper_line].tag;
+                cbus_addr.index = process_dreq_1_addr.index;
+            end
+
             default: begin   
             end
         endcase
@@ -917,13 +923,15 @@ module DCache (
 
 
     //CBus
-    assign dcreq.valid = state==FETCH_1 | state==FETCH_2 | (state==WRITEBACK_1 & delay_counter) | (state==WRITEBACK_2 & delay_counter) | state==UNCACHE_1 | state==UNCACHE_2;     
-    assign dcreq.is_write = state==WRITEBACK_1 | state==WRITEBACK_2 | (state==UNCACHE_1 & |cache_handle.dreq_1.strobe) | (state==UNCACHE_2 & |cache_handle.dreq_2.strobe);  
+    assign dcreq.valid = state==FETCH_1 | state==FETCH_2 | (state==WRITEBACK_1 & delay_counter) | (state==WRITEBACK_2 & delay_counter) | state==UNCACHE_1 | state==UNCACHE_2 | (state==WRITEBACK & delay_counter);     
+    assign dcreq.is_write = state==WRITEBACK_1 | state==WRITEBACK_2 | (state==UNCACHE_1 & |cache_handle.dreq_1.strobe) | (state==UNCACHE_2 & |cache_handle.dreq_2.strobe) | state==WRITEBACK;  
     assign dcreq.size = state==UNCACHE_1 ? cache_handle.dreq_1.size
                         : state==UNCACHE_2 ? cache_handle.dreq_2.size : MSIZE4;      
     assign dcreq.addr = cbus_addr;      
     assign dcreq.strobe = state==UNCACHE_1 ? cache_handle.dreq_1.strobe
-                        : state==UNCACHE_2 ? cache_handle.dreq_2.strobe : {BYTE_PER_DATA{1'b1}};    
+                        : state==UNCACHE_2 ? cache_handle.dreq_2.strobe 
+                        : (state==WRITEBACK_1|state==WRITEBACK_2|state==WRITEBACK) ? {BYTE_PER_DATA{1'b1}}
+                        : '0;    
     assign dcreq.data = state==UNCACHE_1 ? cache_handle.dreq_1.data
                         : state==UNCACHE_2 ? cache_handle.dreq_2.data : buffer[offset_count];    
     assign dcreq.len = (state==UNCACHE_1 | state==UNCACHE_2) ? MLEN1 : MLEN16;  
