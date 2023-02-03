@@ -56,7 +56,7 @@ module bht#(
     endfunction
 
     function index_t get_index(addr_t addr);
-        return addr[2+INDEX_BITS-1+13:2+13];
+        return addr[2+INDEX_BITS-1+3:2+3];
     endfunction
 
     meta_t [ASSOCIATIVITY-1:0] r_meta_hit;

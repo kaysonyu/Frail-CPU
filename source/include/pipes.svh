@@ -203,6 +203,7 @@ typedef struct packed {
 	word_t srca;
 	word_t target;
 	u1 branch_taken;
+	u1 branch_condition;
 	u1 is_slot;
 	u1 is_jr_ra;
 	word_t dest_pc;

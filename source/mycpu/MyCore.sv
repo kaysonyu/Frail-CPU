@@ -30,12 +30,12 @@
 module MyCore (
     input logic clk, resetn,
 
-    output ibus_req_t [1:0] p_ireq,
-    input  ibus_resp_t iresp,
+    (*mark_debug = "true"*) output ibus_req_t [1:0] p_ireq,
+    (*mark_debug = "true"*) input  ibus_resp_t iresp,
 
-    output dbus_req_t [1:0]  p_dreq,
+    (*mark_debug = "true"*) output dbus_req_t [1:0]  p_dreq,
     output logic [1:0] d_uncache,
-    input  dbus_resp_t dresp,
+    (*mark_debug = "true"*) input  dbus_resp_t dresp,
 
     input logic [5:0] ext_int,
 
@@ -102,14 +102,14 @@ module MyCore (
 	assign ireq.valid=  ~pc_except /*|| is_eret||is_EXC || excpM*/;
     assign reset=~resetn;
 
-    fetch_data_t [1:0] dataF2_nxt ;
+    (*mark_debug = "true"*) fetch_data_t [1:0] dataF2_nxt ;
     fetch_data_t [1:0] dataF2 ;
     decode_data_t [1:0] dataD_nxt ,dataD;
     issue_data_t [1:0] dataI_nxt,dataI;
     execute_data_t [1:0] dataE_nxt,dataE;
     execute_data_t [1:0] dataM1_nxt,dataM1;
     execute_data_t [1:0] dataM2_nxt,dataM2;
-    memory_data_t [1:0] dataM3_nxt;
+    (*mark_debug = "true"*) memory_data_t [1:0] dataM3_nxt;
     memory_data_t [1:0] dataM3;
     // assign icache_inst = dataM1[1].cache_ctl.icache_inst;
     assign icache_inst = dataP.cache_i? dataP.icache_inst : dataM1[1].cache_ctl.icache_inst;
@@ -247,7 +247,7 @@ module MyCore (
         // .decode_ret_pc,
         // .decode_taken,//预测跳转
         .exe_pc(dataE[1].pc),
-        .is_taken(dataE[1].branch_taken),
+        .is_taken(dataE[1].branch_condition),
         .dest_pc(dataE[1].dest_pc),
         .ret_pc(dataE[1].pc+8),
         .is_jal(dataE[1].ctl.op==JAL),
