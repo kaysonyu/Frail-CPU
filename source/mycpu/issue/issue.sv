@@ -201,6 +201,7 @@ end
                 dataI[1].cp0_ctl=candidate1.cp0_ctl;
                 dataI[1].pre_b=candidate1.pre_b;
                 dataI[1].pre_pc= candidate1.pre_pc;
+                dataI[1].is_jr_ra= candidate1.is_jr_ra;
             end
             if (issue_en2) begin
                     dataI[0].ctl=candidate2.ctl;

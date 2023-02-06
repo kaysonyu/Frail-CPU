@@ -8,7 +8,7 @@
 `endif 
 
 module bht#(
-    parameter int ASSOCIATIVITY = 2,
+    parameter int ASSOCIATIVITY = 4,
     parameter int SET_NUM = 8,
     parameter int BH_BITS = 1,
     parameter int COUNTER_BITS = 2,
@@ -48,7 +48,7 @@ module bht#(
     * dest_pc is the branch dest of the executed_branch
     */
     output addr_t predict_pc,
-    output logic hit, dpre, hit_pc, hit_pcp4
+    output logic hit, dpre
 );
 
     function tag_t get_tag(addr_t addr);
@@ -63,47 +63,22 @@ module bht#(
     meta_t [ASSOCIATIVITY-1:0] r_meta_in_bht;
     meta_t [ASSOCIATIVITY-1:0] w_meta;
     bh_data_t r_pc_predict, r_pc_replace, w_pc_replace;
-    // counter_t [2**BH_BITS-1:0] r_counter_set_predict, r_counter_set_replace, w_counter_set_replace;
-    associativity_t pc_hit_line, pcp4_hit_line, hit_line, replace_line, in_bht_line;
+    associativity_t hit_line, replace_line, in_bht_line;
     ram_addr_t predict_addr, replace_addr;
-    logic in_bht, pc_hit, pcp4_hit;
+    logic in_bht;
 
     // for predict
 
     always_comb begin
-        pc_hit = 1'b0;
-        pc_hit_line = '0;
+        hit = 1'b0;
+        hit_line = '0;
         for (int i = 0; i < ASSOCIATIVITY; i++) begin
             if (r_meta_hit[i].valid && (r_meta_hit[i].tag == get_tag(branch_pc))) begin
-                pc_hit  = 1'b1;
-                pc_hit_line = associativity_t'(i);
+                hit  = 1'b1;
+                hit_line = associativity_t'(i);
             end
         end 
     end
-
-    always_comb begin
-        pcp4_hit = 1'b0;
-        pcp4_hit_line = '0;
-        for (int i = 0; i < ASSOCIATIVITY; i++) begin
-            if (r_meta_hit[i].valid && (r_meta_hit[i].tag == get_tag(branch_pc+4))) begin
-                pcp4_hit = 1'b1;
-                pcp4_hit_line = associativity_t'(i);
-            end
-        end 
-    end
-
-    assign hit_pc = pc_hit;
-    assign hit_pcp4 = pcp4_hit;
-    assign hit = pcp4_hit | pc_hit;
-    always_comb begin : hit_line_b
-        hit_line = '0;
-        if(pc_hit) hit_line = pc_hit_line;
-        else if(pcp4_hit) hit_line = pcp4_hit_line;
-    end
-    // always_comb begin : is_jump_out_b
-    //     is_jump_out = '0;
-    //     if(pc_hit) is_jump_out = is_pc_jump;
-    // end
 
     assign predict_addr.index = get_index(branch_pc);
     assign predict_addr.line = hit_line;
@@ -126,12 +101,26 @@ module bht#(
     end
 
     plru_t plru_ram [SET_NUM-1 : 0];
-    plru_t plru_r, plru_new;
+    plru_t plru_old, plru_new;
 
-    assign plru_r = plru_ram[get_index(branch_pc)];
+    assign plru_old = plru_ram[get_index(branch_pc)];
 
-    assign replace_line[0] = plru_r[0];
-    assign plru_new[0] = ~hit_line[0];
+    assign replace_line[1] = plru_old[2];
+    assign replace_line[0] = plru_old[2] ? plru_old[0] : plru_old[1];
+
+    always_comb begin
+        plru_new = plru_old;
+
+        plru_new[2] = ~hit_line[1];
+
+        if (hit_line[1]) begin
+            plru_new[0] = ~hit_line[0];
+        end 
+        else begin
+            plru_new[1] = ~hit_line[0];
+        end
+
+    end
 
     always_ff @(posedge clk) begin
         if (hit) begin
@@ -143,12 +132,6 @@ module bht#(
     assign replace_addr.index = get_index(executed_branch_pc);
 
     assign w_pc_replace.pc = (~in_bht && is_write) ? dest_pc : r_pc_replace.pc;
-    // always_comb begin : w_pc_replace_bhr
-    //     w_pc_replace.bhr = '0;
-    //     if(in_bht) begin
-    //         w_pc_replace.bhr = {r_pc_replace.bhr[BH_BITS-2:0], is_taken};
-    //     end
-    // end
 
     always_comb begin : w_meta_b
         for (int i = 0; i < ASSOCIATIVITY; i++) begin
@@ -201,39 +184,6 @@ module bht#(
     end
     assign w_pc_replace.bhr = in_bht ? is_taken : '1;
 
-    // always_comb begin : w_counter_set_replace_b 
-    //     w_counter_set_replace = '0;
-    //     if(in_bht) begin
-    //         for (int i = 0; i < 2**BH_BITS; i++) begin
-    //             if (bhr_t'(i) == r_pc_replace.bhr) begin
-    //                 w_counter_set_replace[i] = w_counter;
-    //             end else begin
-    //                 w_counter_set_replace[i] = r_counter_set_replace[i];
-    //             end
-    //         end    
-    //     end else if (is_write) begin
-    //         w_counter_set_replace = '1;
-    //     end 
-    // end
-
-    // logic [2**BH_BITS-1:0] counter_strobe;
-
-    // always_comb begin : counter_strobe_b
-    //     counter_strobe = '0;
-    //     if(in_bht) begin
-    //         for (int i = 0; i < 2**BH_BITS; i++) begin
-    //             if (bhr_t'(i) == r_pc_replace.bhr) begin
-    //                 counter_strobe[i] = 1'b1;
-    //             end else begin
-    //                 counter_strobe[i] = 1'b0;
-    //             end
-    //         end    
-    //     end else if (is_write) begin
-
-    //         counter_strobe = '1;
-    //     end 
-    // end
-
     ram_addr_t reset_addr;
 
     always_ff @( posedge clk ) begin : reset
@@ -279,25 +229,6 @@ module bht#(
         .addr_2(predict_addr),
         .rdata_2(r_pc_predict)
     );
-
-    // LUTRAM_DualPort #(
-    //     .ADDR_WIDTH(INDEX_BITS+ASSOCIATIVITY_BITS),
-    //     .DATA_WIDTH(COUNTER_BITS * (2**BH_BITS)),
-    //     .BYTE_WIDTH(COUNTER_BITS * (2**BH_BITS)),
-    //     .READ_LATENCY(0)
-    // ) counter_ram(
-    //     .clk(clk), 
-
-    //     .en_1(in_bht | is_write | ~resetn), //port1 for replace
-    //     .addr_1(resetn ? replace_addr : reset_addr),
-    //     .rdata_1(r_counter_set_replace),
-    //     .strobe(1'b1),  
-    //     .wdata(resetn ? w_counter_set_replace : '1),
-
-    //     .en_2(1'b1), //port2 for predict
-    //     .addr_2(predict_addr),
-    //     .rdata_2(r_counter_set_predict)
-    // );
 
 endmodule
 

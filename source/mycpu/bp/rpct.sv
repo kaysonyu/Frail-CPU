@@ -5,7 +5,7 @@
 
 
 module rpct #(
-    parameter int ASSOCIATIVITY = 2,
+    parameter int ASSOCIATIVITY = 4,
     parameter int SET_NUM = 8,
     parameter int TAG_BITS = 18,
     
@@ -32,10 +32,10 @@ module rpct #(
     input logic is_ret, //if this instr is jr (ra)
     input addr_t pc_f1, jrra_pc, call_pc, ret_pc,
     /*
-    * pc_check is the pc to be predicted(from f1)
+    * pc_f1 is the pc to be predicted(from f1)
     * jrra_pc is the pc of the jr (ra) or jalr (from exe)
     */
-    output logic hit, hit_pc, hit_pcp4,
+    output logic hit,
     output addr_t pre_pc
 );
 
@@ -53,40 +53,20 @@ module rpct #(
 
     meta_set_t jrra_pc_pre, ret_pc_pre;
     meta_set_t r_jrra_pc_re, w_jrra_pc_re, r_call_pc_re, w_call_pc_re, r_ret_pc_re, w_ret_pc_re;
-    associativity_t replace_line, hit_line, pc_hit_line, pcp4_hit_line, call_hit_line, ret_hit_line;
-    logic pc_hit, pcp4_hit, call_hit, ret_hit;
+    associativity_t replace_line, hit_line, call_hit_line, ret_hit_line;
+    logic call_hit, ret_hit;
 
     // for predict
 
     always_comb begin
-        pc_hit = 1'b0;
-        pc_hit_line = '0;
+        hit = 1'b0;
+        hit_line = '0;
         for (int i = 0; i < ASSOCIATIVITY; i++) begin
             if (jrra_pc_pre[i].valid && (jrra_pc_pre[i].tag == get_tag(pc_f1))) begin
-                pc_hit  = 1'b1;
-                pc_hit_line = associativity_t'(i);
+                hit  = 1'b1;
+                hit_line = associativity_t'(i);
             end
         end 
-    end
-
-    always_comb begin
-        pcp4_hit = 1'b0;
-        pcp4_hit_line = '0;
-        for (int i = 0; i < ASSOCIATIVITY; i++) begin
-            if (jrra_pc_pre[i].valid && (jrra_pc_pre[i].tag == get_tag(pc_f1+4))) begin
-                pcp4_hit = 1'b1;
-                pcp4_hit_line = associativity_t'(i);
-            end
-        end 
-    end
-
-    assign hit_pc = pc_hit;
-    assign hit_pcp4 = pcp4_hit;
-    assign hit = pcp4_hit | pc_hit;
-    always_comb begin
-        hit_line = '0;
-        if(pc_hit) hit_line = pc_hit_line;
-        else if(pcp4_hit) hit_line = pcp4_hit_line;
     end
 
     assign pre_pc = {ret_pc_pre[hit_line].pchi, ret_pc_pre[hit_line].tag, 2'b0};
@@ -107,12 +87,26 @@ module rpct #(
     end
 
     plru_t plru_ram [SET_NUM-1 : 0];
-    plru_t plru_r, plru_new;
+    plru_t plru_old, plru_new;
 
-    assign plru_r = plru_ram[get_index(pc_f1)];
+    assign plru_old = plru_ram[get_index(pc_f1)];
 
-    assign replace_line[0] = plru_r[0];
-    assign plru_new[0] = ~hit_line[0];
+    assign replace_line[1] = plru_old[2];
+    assign replace_line[0] = plru_old[2] ? plru_old[0] : plru_old[1];
+
+    always_comb begin
+        plru_new = plru_old;
+
+        plru_new[2] = ~hit_line[1];
+
+        if (hit_line[1]) begin
+            plru_new[0] = ~hit_line[0];
+        end 
+        else begin
+            plru_new[1] = ~hit_line[0];
+        end
+
+    end
 
     always_ff @(posedge clk) begin
         if (hit) begin

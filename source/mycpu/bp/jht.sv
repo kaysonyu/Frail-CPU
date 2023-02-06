@@ -8,7 +8,7 @@
 `endif 
 
 module jht#(
-    parameter int ASSOCIATIVITY = 2,
+    parameter int ASSOCIATIVITY = 4,
     parameter int SET_NUM = 8,
 
     localparam INDEX_BITS = $clog2(SET_NUM),
@@ -36,7 +36,7 @@ module jht#(
     * dest_pc is the branch dest of the executed_branch
     */
     output addr_t predict_pc,
-    output logic hit, hit_pc, hit_pcp4
+    output logic hit
 );
 
     function tag_t get_tag(addr_t addr);
@@ -45,7 +45,7 @@ module jht#(
 
     function index_t get_index(addr_t addr);
         
-        return addr[2+INDEX_BITS-1+5:2+5];
+        return addr[2+INDEX_BITS-1+3:2+3];
 
     endfunction
 
@@ -53,41 +53,21 @@ module jht#(
     meta_t [ASSOCIATIVITY-1:0] r_meta_in_jht;
     meta_t [ASSOCIATIVITY-1:0] w_meta;
     addr_t r_pc_predict, r_pc_replace, w_pc_replace;
-    associativity_t pc_hit_line, pcp4_hit_line, hit_line, replace_line;
+    associativity_t hit_line, replace_line;
     ram_addr_t predict_addr, replace_addr;
-    logic in_jht, pc_hit, pcp4_hit;
+    logic in_jht;
 
     // for predict
 
     always_comb begin
-        pc_hit = 1'b0;
-        pc_hit_line = '0;
+        hit = 1'b0;
+        hit_line = '0;
         for (int i = 0; i < ASSOCIATIVITY; i++) begin
             if (r_meta_hit[i].valid && (r_meta_hit[i].tag == get_tag(j_pc))) begin
-                pc_hit  = 1'b1;
-                pc_hit_line = associativity_t'(i);
+                hit  = 1'b1;
+                hit_line = associativity_t'(i);
             end
         end 
-    end
-
-    always_comb begin
-        pcp4_hit = 1'b0;
-        pcp4_hit_line = '0;
-        for (int i = 0; i < ASSOCIATIVITY; i++) begin
-            if (r_meta_hit[i].valid && (r_meta_hit[i].tag == get_tag(j_pc+4))) begin
-                pcp4_hit = 1'b1;
-                pcp4_hit_line = associativity_t'(i);
-            end
-        end 
-    end
-
-    assign hit_pc = pc_hit;
-    assign hit_pcp4 = pcp4_hit;
-    assign hit = pcp4_hit | pc_hit;
-    always_comb begin : hit_line_b
-        hit_line = '0;
-        if(pc_hit) hit_line = pc_hit_line;
-        else if(pcp4_hit) hit_line = pcp4_hit_line;
     end
 
     assign predict_addr.index = get_index(j_pc);
@@ -108,12 +88,26 @@ module jht#(
     end
 
     plru_t plru_ram [SET_NUM-1 : 0];
-    plru_t plru_r, plru_new;
+    plru_t plru_old, plru_new;
 
-    assign plru_r = plru_ram[get_index(j_pc)];
+    assign plru_old = plru_ram[get_index(j_pc)];
 
-    assign replace_line[0] = plru_r[0];
-    assign plru_new[0] = ~hit_line[0];
+    assign replace_line[1] = plru_old[2];
+    assign replace_line[0] = plru_old[2] ? plru_old[0] : plru_old[1];
+
+    always_comb begin
+        plru_new = plru_old;
+
+        plru_new[2] = ~hit_line[1];
+
+        if (hit_line[1]) begin
+            plru_new[0] = ~hit_line[0];
+        end 
+        else begin
+            plru_new[1] = ~hit_line[0];
+        end
+
+    end
 
     always_ff @(posedge clk) begin
         if (hit) begin

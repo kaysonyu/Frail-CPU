@@ -452,6 +452,7 @@
     always_ff @(posedge clk)begin
         if(print_cnt_j[15] == 1)begin
             $display("\nj-type success rate:%.2f %%", (total_j-fail_j)/total_j*100);
+            $display("total jump:%.2f", total_j);
             print_cnt_j<='0;
         end else begin
             print_cnt_j <= print_cnt_j + 1;

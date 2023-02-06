@@ -16,7 +16,7 @@ module bpu #(
     input logic clk, resetn,
 
     input addr_t f1_pc,// f1
-    output logic f1_taken, pos,
+    output logic f1_taken, hit,
     output addr_t pre_pc,
 
     // input logic is_jr_ra_decode,// decode (jump do not need pre)
@@ -53,8 +53,8 @@ module bpu #(
         end
     end
 
-    logic bht_hit_pc, bht_hit_pcp4, jht_hit_pc, jht_hit_pcp4, rpct_hit_pc, rpce_hit_pcp4;
-    assign pos = bht_hit_pc | rpct_hit_pc | jht_hit_pc;
+    // logic bht_hit_pc, bht_hit_pcp4, jht_hit_pc, jht_hit_pcp4, rpct_hit_pc, rpce_hit_pcp4;
+    assign hit = bht_hit | rpct_hit | jht_hit;
     // assign jr_ra_fail = '0;
 
     bht bht (
@@ -66,9 +66,7 @@ module bpu #(
         .is_taken,
         .predict_pc(bht_pre_pc),
         .hit(bht_hit),
-        .dpre(prediction_outcome),
-        .hit_pc(bht_hit_pc),
-        .hit_pcp4(bht_hit_pcp4)
+        .dpre(prediction_outcome)
     );
 
     jht jht (
@@ -78,9 +76,7 @@ module bpu #(
         .executed_j_pc(exe_pc),
         .dest_pc,
         .predict_pc(jht_pre_pc),
-        .hit(jht_hit),
-        .hit_pc(jht_hit_pc),
-        .hit_pcp4(jht_hit_pcp4)
+        .hit(jht_hit)
     );
 
     // ras ras (
@@ -95,15 +91,13 @@ module bpu #(
 
     rpct rpct (
         .clk, .resetn,
-        .is_call(is_jal | is_jalr),
+        .is_call(is_jal),
         .is_ret(is_jr_ra_exe),
         .pc_f1(f1_pc),
         .jrra_pc(exe_pc),
         .call_pc(dest_pc),
         .ret_pc(is_jr_ra_exe ? dest_pc : ret_pc),
         .hit(rpct_hit),
-        .hit_pc(rpct_hit_pc),
-        .hit_pcp4(rpce_hit_pcp4),
         .pre_pc(rpct_pre_pc)
     );
 

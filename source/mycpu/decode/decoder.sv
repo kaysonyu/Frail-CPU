@@ -14,8 +14,8 @@ module decoder (
         output creg_addr_t srcrega, srcregb, destreg,
         output u8 cp0ra,
         output cp0_control_t cp0_ctl,
-        output cache_control_t cache_ctl
-        // output u1 is_jr_ra
+        output cache_control_t cache_ctl,
+        output u1 is_jr_ra
     );
     u6 op_;
     creg_addr_t rs,rd,rt;
@@ -867,5 +867,5 @@ module decoder (
         
 	end
 
-    // assign is_jr_ra=ctl.op==JR&&srcrega==31;
+    assign is_jr_ra=(ctl.op==JR&&srcrega==31);
 endmodule

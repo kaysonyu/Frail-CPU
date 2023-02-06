@@ -199,7 +199,7 @@ module MyCore (
         .entrance,
 		.is_eret,
 		.is_INTEXC,
-        .pred_taken(pred_taken&&~zero_prej),
+        .pred_taken(pred_taken),
         .pre_pc,
         // .issue_taken(jrI),
         .zero_prej,
@@ -211,7 +211,8 @@ module MyCore (
     assign dataF1_nxt.pc=dataP.pc;
     assign dataF1_nxt.cp0_ctl.ctype= pc_except||(|mmu_exc_out.i_tlb_exc[1]) ? EXCEPTION : NO_EXC;
     assign dataF1_nxt.cp0_ctl.exc_eret= pc_except;
-    assign dataF1_nxt.pre_b= pred_taken&&~zero_prej;
+    assign dataF1_nxt.pre_b[1]= pred_taken && hit_bit;
+    assign dataF1_nxt.pre_b[0]= pred_taken && ~hit_bit;
     assign dataF1_nxt.pre_pc= pre_pc;
     assign dataF1_nxt.nxt_valid=~zero_prej&&~(|dataM1[1].cache_ctl.icache_inst)&&~i_wait&&~icache_saved&&~dataP.cache_i;
     assign dataF1_nxt.nxt_exception=~(|mmu_exc_out.i_tlb_exc[1]) && (|mmu_exc_out.i_tlb_exc[0]);
@@ -235,12 +236,16 @@ module MyCore (
 	end
     // word_t pc_f1;
 
-    bpu bpu (
+    u1 pred_taken0, pred_taken1, hit0, hit1;
+    addr_t pre_pc1, pre_pc0;
+
+    bpu bpu1 (
         .clk,.resetn,
         .f1_pc(dataP.pc),
         // .hit(pred_hit),
-        .f1_taken(pred_taken),
-        .pre_pc,
+        .f1_taken(pred_taken1),
+        .hit(hit1),
+        .pre_pc(pre_pc1),
         // .need_pre()
         // .is_jr_ra_decode(is_jr_ra_issue),
         // .jr_ra_fail,
@@ -254,11 +259,37 @@ module MyCore (
         .is_jalr(dataE[1].ctl.op==JALR),
         .is_branch(dataE[1].ctl.branch),
         .is_j(dataE[1].ctl.op==J),
-        .is_jr_ra_exe(dataE[1].is_jr_ra),
-        .pos(hit_bit)
+        .is_jr_ra_exe(dataE[1].is_jr_ra)
         // .flush_ras(dataE[1].branch_taken)
     );
 
+    bpu bpu0 (
+        .clk,.resetn,
+        .f1_pc(dataP.pc+4),
+        // .hit(pred_hit),
+        .f1_taken(pred_taken0),
+        .hit(hit0),
+        .pre_pc(pre_pc0),
+        // .need_pre()
+        // .is_jr_ra_decode(is_jr_ra_issue),
+        // .jr_ra_fail,
+        // .decode_ret_pc,
+        // .decode_taken,//预测跳转
+        .exe_pc(dataE[1].pc),
+        .is_taken(dataE[1].branch_condition),
+        .dest_pc(dataE[1].dest_pc),
+        .ret_pc(dataE[1].pc+8),
+        .is_jal(dataE[1].ctl.op==JAL),
+        .is_jalr(dataE[1].ctl.op==JALR),
+        .is_branch(dataE[1].ctl.branch),
+        .is_j(dataE[1].ctl.op==J),
+        .is_jr_ra_exe(dataE[1].is_jr_ra)
+        // .flush_ras(dataE[1].branch_taken)
+    );
+
+    assign hit_bit = hit1;
+    assign pred_taken = pred_taken0 | pred_taken1;
+    assign pre_pc = hit1 ? pre_pc1 : pre_pc0;
 
     pipereg #(.T(fetch1_data_t))F1F2reg(
         .clk,
@@ -312,10 +343,10 @@ module MyCore (
     end
 
     assign dataF2_nxt[1].pc=dataF1.pc;
-    assign dataF2_nxt[1].pre_b=dataF1.pre_b;
+    assign dataF2_nxt[1].pre_b=dataF1.pre_b[1];
     assign dataF2_nxt[1].pre_pc=dataF1.pre_pc;
-    assign dataF2_nxt[0].pre_b='0;
-    assign dataF2_nxt[0].pre_pc='0;
+    assign dataF2_nxt[0].pre_b=dataF1.pre_b[0];
+    assign dataF2_nxt[0].pre_pc=dataF1.pre_pc;
     // assign dataF2_nxt[1].raw_instr=rawinstr_saved? raw_instrf2_save[31:0]:iresp.data[31:0];
     assign dataF2_nxt[1].valid= dataF1.valid;
     assign dataF2_nxt[0].pc=dataF1.nxt_valid? dataF1.pc+4:'0;

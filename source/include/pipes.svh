@@ -131,7 +131,7 @@ typedef struct packed {
 	cp0_control_t cp0_ctl;
 	u1 valid;
 	u32 pc;
-	u1 pre_b;
+	u1 [1:0]pre_b;
 	word_t pre_pc;
 	u1 nxt_valid;
 	u1 nxt_exception;
@@ -167,6 +167,7 @@ typedef struct packed {
 	cp0_control_t cp0_ctl;
 	cache_control_t cache_ctl;
 	tlb_exc_t i_tlb_exc;
+	u1 is_jr_ra;
 	// word_t rd1,rd2;
 } decode_data_t;
 
