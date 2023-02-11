@@ -80,6 +80,7 @@ module decode(
 
     assign dataD[1].pre_b=dataF2[1].pre_b;
     assign dataD[1].pre_pc=dataF2[1].pre_pc;
+
     assign dataD[0].pre_b=dataF2[0].pre_b;
     assign dataD[0].pre_pc=dataF2[0].pre_pc;
 

@@ -12,7 +12,7 @@
 `endif 
 
     module execute(
-        input clk,resetn,
+        input clk, resetn,
         input issue_data_t [1:0] dataI,
         output execute_data_t [1:0] dataE,
         input u1 d_wait,
@@ -151,45 +151,6 @@
 
     assign dataE[0].target='0;
     assign dataE[0].branch_taken='0;
-
-    // real fail_b;
-    // real total_b;
-    // logic[28:0] print_cnt;
-    // always_ff @(posedge clk)begin
-    //     if(print_cnt[15] == 1)begin
-    //         $display("b-type success rate:%.2f %%", (total_b-fail_b)/total_b*100);
-    //         print_cnt<='0;
-    //         // $display("b-type pred-fail_b rate:%.2f %%", (total_b-fail_b)/total_b*100);
-    //     end else begin
-    //         print_cnt <= print_cnt + 1;
-    //         if ((dataI[1].ctl.branch&&branch_condition&&~dataI[1].pre_b)
-    //             ||(dataI[1].ctl.branch&&~branch_condition&&dataI[1].pre_b))begin
-    //             fail_b <= fail_b + 1;
-    //         end
-    //         if(dataI[1].ctl.branch) begin
-    //             total_b <= total_b + 1;
-    //         end
-    //     end
-    // end
-
-    // real fail_j;
-    // real total_j;
-    // logic[28:0] print_cnt_j;
-    // always_ff @(posedge clk)begin
-    //     if(print_cnt_j[15] == 1)begin
-    //         $display("j-type success rate:%.2f %%", (total_j-fail_j)/total_j*100);
-    //         print_cnt_j<='0;
-    //     end else begin
-    //         print_cnt_j <= print_cnt_j + 1;
-    //         if (dataI[1].ctl.jump&&~dataI[1].pre_b)begin
-    //             fail_j <= fail_j + 1;
-    //         end
-    //         if(dataI[1].ctl.jump) begin
-    //             total_j <= total_j + 1;
-    //         end
-    //     end
-    // end
-
 
     assign target_offset={{15{raw_instr[15]}},raw_instr[14:0],2'b00};
 
@@ -436,11 +397,11 @@
             // $display("b-type pred-fail_b rate:%.2f %%", (total_b-fail_b)/total_b*100);
         end else begin
             print_cnt <= print_cnt + 1;
-            if ((dataI[1].ctl.branch&&branch_condition&&~dataI[1].pre_b)
-                ||(dataI[1].ctl.branch&&~branch_condition&&dataI[1].pre_b))begin
+            if (((dataI[1].ctl.branch&&branch_condition&&~dataI[1].pre_b)
+                ||(dataI[1].ctl.branch&&~branch_condition&&dataI[1].pre_b)) && ~stallE)begin
                 fail_b <= fail_b + 1;
             end
-            if(dataI[1].ctl.branch) begin
+            if(dataI[1].ctl.branch && ~stallE) begin
                 total_b <= total_b + 1;
             end
         end
@@ -448,19 +409,36 @@
 
     real fail_j;
     real total_j;
+    real jrra, jal, j, jalr;
     logic[28:0] print_cnt_j;
     always_ff @(posedge clk)begin
         if(print_cnt_j[15] == 1)begin
             $display("\nj-type success rate:%.2f %%", (total_j-fail_j)/total_j*100);
             $display("total jump:%.2f", total_j);
             print_cnt_j<='0;
+            $display("jrra:%.2f", jrra);
+            $display("jal:%.2f", jal);
+            $display("j:%.2f", j);
+            $display("jalr:%.2f", jalr);
         end else begin
             print_cnt_j <= print_cnt_j + 1;
-            if (dataI[1].ctl.jump&&~(dataI[1].pre_b&&dataI[1].pre_pc==target))begin
+            if ((dataI[1].ctl.jump&&~(dataI[1].pre_b&&dataI[1].pre_pc==target)) && ~stallE)begin
                 fail_j <= fail_j + 1;
             end
-            if(dataI[1].ctl.jump) begin
+            if(dataI[1].ctl.jump && ~stallE) begin
                 total_j <= total_j + 1;
+            end
+            if(dataI[1].ctl.op == JAL && ~stallE) begin
+                jal <= jal + 1;
+            end
+            if(dataI[1].ctl.op == JALR && ~stallE) begin
+                jalr <= jalr + 1;
+            end
+            if(dataI[1].ctl.op == J && ~stallE) begin
+                j <= j + 1;
+            end
+            if(dataI[1].is_jr_ra && ~stallE) begin
+                jrra <= jrra + 1;
             end
         end
     end

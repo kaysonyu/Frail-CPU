@@ -867,5 +867,5 @@ module decoder (
         
 	end
 
-    assign is_jr_ra=(ctl.op==JR&&srcrega==31);
+    assign is_jr_ra =  (ctl.op==JR && srcrega==31);
 endmodule

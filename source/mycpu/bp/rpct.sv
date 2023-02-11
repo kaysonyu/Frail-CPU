@@ -33,7 +33,7 @@ module rpct #(
     input addr_t pc_f1, jrra_pc, call_pc, ret_pc,
     /*
     * pc_f1 is the pc to be predicted(from f1)
-    * jrra_pc is the pc of the jr (ra) or jalr (from exe)
+    * jrra_pc is the pc of the jr (ra) (from exe)
     */
     output logic hit,
     output addr_t pre_pc
